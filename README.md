@@ -43,6 +43,29 @@ back to the access point, and from there retries the network every minute while 
 | `/config` | `GET` settings JSON (no WiFi password), `POST` JSON to import (saves and reboots) |
 | `/log` | Recent log lines (reading clears them) |
 
+## OTA updates (ElegantOTA Pro)
+
+The `/update` page uses [ElegantOTA Pro](https://elegantota.pro), the paid version of ElegantOTA. PlatformIO
+fetches it from a private Git repository (`softt-io/ElegantOTA-Pro`), so the build fails at dependency install
+without access to it. To build with the free [ElegantOTA](https://github.com/ayushsharma82/ElegantOTA) instead:
+
+1. In [platformio.ini](platformio.ini), under `lib_deps`, comment out the Pro line and uncomment the free one:
+
+   ```ini
+   ; https://github.com/softt-io/ElegantOTA-Pro.git
+   ayushsharma82/ElegantOTA@^3.1.7
+   ```
+
+2. In [src/wifi/WifiManager.cpp](src/wifi/WifiManager.cpp), change `#include <ElegantOTAPro.h>` to
+   `#include <ElegantOTA.h>`.
+
+The GitHub Actions build ([.github/workflows/main.yml](.github/workflows/main.yml)) clones the Pro repository with a
+token from the repository secret `ELEGANTOTA_PRO_TOKEN`: a personal access token of an account that can read
+`softt-io/ElegantOTA-Pro`. Builds without the secret, including pull requests from forks, fail at that step.
+
+The firmware only uses the API both versions share (`begin`, `onStart`, `onEnd`, `loop`), and
+`ELEGANTOTA_USE_ASYNC_WEBSERVER=1` in `build_flags` applies to both, so nothing else needs to change.
+
 ## INA219 sensor
 
 Connect an INA219 current / voltage sensor breakout to the board's I2C bus (also on the extension header):

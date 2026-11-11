@@ -23,6 +23,17 @@ jobs:
           python-version: '3.11'
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio intelhex
+      # ElegantOTA Pro is a private repository: PlatformIO's git clone of it goes through a token
+      # with read access to it (repository secret ELEGANTOTA_PRO_TOKEN, see README)
+      - name: Allow access to ElegantOTA Pro
+        env:
+          ELEGANTOTA_PRO_TOKEN: ${{ secrets.ELEGANTOTA_PRO_TOKEN }}
+        run: |
+          if [ -z "$ELEGANTOTA_PRO_TOKEN" ]; then
+            echo "::error::Secret ELEGANTOTA_PRO_TOKEN is not set (or not available to this run, e.g. a pull request from a fork)"
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${ELEGANTOTA_PRO_TOKEN}@github.com/softt-io/ElegantOTA-Pro".insteadOf "https://github.com/softt-io/ElegantOTA-Pro"
       - name: Build PlatformIO Project
         run: pio run -e ${{ matrix.environment }}
       - name: Upload BIN Artifacts
