@@ -3,10 +3,11 @@
 #include "display/Screen.h"
 #include "display/pages/Page.h"
 
-#define HOME_PAGE_COUNT 2
+#define HOME_PAGE_COUNT 3
 
-// Status bar over a carousel of pages (Main, Settings).
-//   Browsing: PWR click = next page (slides in from the right), PWR double click = previous, BOOT click = open.
+// Status bar over a carousel of pages (Main, Settings, Help).
+//   Browsing: PWR click or swipe left = next page (slides in from the right), PWR double click or swipe
+//             right = previous, BOOT click = open.
 //   Opened:   buttons go to the page; it returns PageAction::EXIT (BOOT long press by convention) to browse again.
 class CHomeScreen : public CScreen {
 
@@ -18,6 +19,9 @@ public:
   bool update() override;
   void draw(Arduino_GFX &gfx) override;
   bool onButton(ButtonId id, ButtonEvent event) override;
+  #ifdef TOUCH
+  bool onTouch(TouchEvent event, int16_t x, int16_t y) override;
+  #endif
 
 private:
   CPage *pages[HOME_PAGE_COUNT];

@@ -18,8 +18,6 @@ public:
 
   void onOpen() override;
   void onClose() override;
-  const char* getHeader() const override;
-  const char* getHint() const override;
   void drawContent(Arduino_GFX &gfx) override;
   PageAction onButton(ButtonId id, ButtonEvent event) override;
 
@@ -40,6 +38,6 @@ private:
   void drawWifi(Arduino_GFX &gfx);
   void drawForgetWifi(Arduino_GFX &gfx);
   void drawSensor(Arduino_GFX &gfx);
-  void drawLevel(Arduino_GFX &gfx, uint8_t value, const char *offText);
+  void drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value, const char *offText);
   void drawAbout(Arduino_GFX &gfx);
 };

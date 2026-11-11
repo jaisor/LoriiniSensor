@@ -110,15 +110,6 @@ void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device) {
   gfx.drawFastHLine(SCREEN_SAFE_INSET, UI_STATUS_BAR_HEIGHT, LCD_WIDTH - 2 * SCREEN_SAFE_INSET, UI_COLOR_DIVIDER);
 }
 
-void UI_drawHeader(Arduino_GFX &gfx, const char *title) {
-  UI_drawChevron(gfx, 30, UI_HEADER_BASELINE - 6, 6, -1, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, title, UI_HEADER_BASELINE, UI_FONT_TITLE, UI_COLOR_TEXT);
-}
-
-void UI_drawHint(Arduino_GFX &gfx, const char *hint) {
-  UI_drawCentered(gfx, hint, UI_HINT_BASELINE, UI_FONT_SMALL, UI_COLOR_MUTED);
-}
-
 void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index) {
   const int16_t gap = 14;
   int16_t x = LCD_WIDTH / 2 - (count - 1) * gap / 2;

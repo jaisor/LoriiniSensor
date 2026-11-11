@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoLog.h>
+#include <Wire.h>
 
 #include "Device.h"
 #ifdef SCREEN
@@ -58,6 +59,11 @@ void CDevice::begin() {
   #ifdef BUZZER
   buzzer.begin();  // After the backlight PWM, see CBuzzer
   #endif
+  // Shared I2C bus: touch now, IMU and RTC later
+  Wire.begin(I2C_SDA, I2C_SCL, I2C_HZ);
+  #ifdef TOUCH
+  touch.begin();
+  #endif
   // PWR is usually still held from switching the board on; CButton ignores that press
   for (CButton &b : buttons) {
     b.begin();
@@ -70,6 +76,7 @@ void CDevice::loop() {
     readBattery();
   }
   handleButtons();
+  handleTouch();
   handlePowerOff();
   handleRestart();
   #ifdef SCREEN
@@ -195,6 +202,24 @@ void CDevice::onButton(ButtonId id, ButtonEvent event) {
     case ButtonEvent::LONG_PRESS:   buzzer.play(BuzzerSound::LONG_PRESS); break;
     default: break;
   }
+  #endif
+}
+
+void CDevice::handleTouch() {
+  #ifdef TOUCH
+  TouchEvent event = touch.loop();
+  if (event == TouchEvent::NONE) return;
+  Log.infoln("Touch %s at %i,%i", touchEventToString(event), touch.getX(), touch.getY());
+  bool handled = false;
+  #ifdef SCREEN
+  handled = display->onTouch(event, touch.getX(), touch.getY());
+  #endif
+  #ifdef BUZZER
+  if (handled) {
+    buzzer.play(BuzzerSound::CLICK);  // Only gestures that did something, so stray touches stay quiet
+  }
+  #endif
+  (void)handled;
   #endif
 }
 

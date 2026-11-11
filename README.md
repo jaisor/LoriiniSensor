@@ -49,18 +49,21 @@ Power-cycle the board 3 times, each within 2 seconds of booting, or use **Factor
 
 ## On-device UI
 
-A status bar (WiFi, time, battery) sits above a carousel of pages:
+A status bar (WiFi, time, battery) sits above a carousel of pages. There are no on-screen titles or button labels;
+the controls are the same everywhere, and the **Help** page on the device describes them:
 
 | | Browsing pages | Inside a page |
 |---|---|---|
 | **PWR** click | next page | next item / increase |
 | **PWR** double click | previous page | previous item / decrease |
+| Swipe left / right | next / previous page | |
 | **BOOT** click | open the page | select / confirm |
 | **BOOT** hold | | back |
 
 - **Main** - sensor values (placeholder until a sensor is added)
-- **Settings** - WiFi (details, forget the network to restart in setup mode), Sensor (placeholder), screen
+- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensor (placeholder), screen
   brightness, button sounds volume, About
+- **Help** - buttons and gestures, Settings, power, web setup
 
 In setup mode the screen shows how to join the device's WiFi; press **BOOT** to go to the pages instead.
 

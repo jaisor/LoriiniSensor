@@ -28,12 +28,11 @@ class CDevice;
 
 #define UI_STATUS_BAR_HEIGHT 36   // Clear of the rounded corners for content below
 
-// Layout below the status bar
+// Layout below the status bar. No titles or button hints: the buttons work the same everywhere
+// (see the Help page), so the whole area is content.
 #define UI_CONTENT_TOP     44     // First row under the status bar
-#define UI_HEADER_BASELINE 64     // Title of an opened page
-#define UI_BODY_TOP        76     // Content of an opened page starts here
-#define UI_BODY_BOTTOM     250    // ... and ends here, above the hint line
-#define UI_HINT_BASELINE   268    // Button hint at the bottom (kept short: the corners are rounded)
+#define UI_BODY_TOP        UI_CONTENT_TOP
+#define UI_BODY_BOTTOM     266    // Lower rows narrow quickly in the rounded corners - keep them centered
 
 // The fonts are 7-bit ASCII: no bullets, arrows or degree signs - draw those (UI_drawChevron)
 
@@ -53,12 +52,6 @@ void UI_drawChevron(Arduino_GFX &gfx, int16_t cx, int16_t cy, int16_t size, int8
 
 // Top row: WiFi (signal bars / AP / offline), clock (once NTP has answered), battery level
 void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device);
-
-// Title of an opened page, with a back chevron
-void UI_drawHeader(Arduino_GFX &gfx, const char *title);
-
-// Button hint line at the bottom
-void UI_drawHint(Arduino_GFX &gfx, const char *hint);
 
 // Carousel position: count dots centered on cy, index highlighted
 void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index);

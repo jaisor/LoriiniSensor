@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Arduino_GFX_Library.h>
+#include "Configuration.h"
 #include "Button.h"
+#include "Touch.h"
 
 class CDevice;
 
@@ -32,6 +34,11 @@ public:
   // Button gesture while this screen is showing; return true to redraw. The device plays the button's
   // sound right after (so a volume change made here is heard). Holding PWR for 3s still powers off.
   virtual bool onButton(ButtonId id, ButtonEvent event) { return false; }
+
+  #ifdef TOUCH
+  // Touch gesture (reported when the finger lifts) at its last point; return true to redraw
+  virtual bool onTouch(TouchEvent event, int16_t x, int16_t y) { return false; }
+  #endif
 
   void invalidate() { dirty = true; }
   bool isDirty() const { return dirty; }

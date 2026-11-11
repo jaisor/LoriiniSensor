@@ -101,6 +101,17 @@ void CDisplay::onButton(ButtonId id, ButtonEvent event) {
   }
 }
 
+#ifdef TOUCH
+bool CDisplay::onTouch(TouchEvent event, int16_t x, int16_t y) {
+  if (!ready || !current) return false;
+  if (current->onTouch(event, x, y)) {
+    current->invalidate();
+    return true;
+  }
+  return false;
+}
+#endif
+
 void CDisplay::showMessage(const char *text, unsigned long durationMs) {
   strlcpy(message, text, sizeof(message));
   tsMessageEnd = millis() + durationMs;

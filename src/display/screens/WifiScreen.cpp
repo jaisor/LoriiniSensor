@@ -79,7 +79,6 @@ void CWifiScreen::draw(Arduino_GFX &gfx) {
       UI_drawCentered(gfx, line, 219, UI_FONT_SMALL, UI_COLOR_TEXT);
       snprintf(line, sizeof(line), "Open http://%s", net.ip);
       UI_drawCentered(gfx, line, 240, UI_FONT_LABEL, UI_COLOR_YELLOW);
-      UI_drawHint(gfx, "BOOT menu");
     } return;
 
     case DeviceState::WIFI_OFFLINE:

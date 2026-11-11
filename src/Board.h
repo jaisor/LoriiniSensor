@@ -29,6 +29,9 @@
   #define TP_RST    13
   #define TP_INT    14
   #define TOUCH_I2C_ADDR 0x15
+  #define TOUCH_MIRROR_X 0  // Set to 1 if swipes come out reversed left/right
+  #define TOUCH_MIRROR_Y 0
+  #define I2C_HZ 400000
   #define IMU_I2C_ADDR   0x6B
   #define IMU_INT   38
   #define RTC_I2C_ADDR   0x51

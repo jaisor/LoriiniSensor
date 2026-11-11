@@ -8,19 +8,21 @@
 #include "display/UI.h"
 #include "display/pages/MainPage.h"
 #include "display/pages/SettingsPage.h"
+#include "display/pages/HelpPage.h"
 
 #define SLIDE_MS 240
 
-// Card box in the carousel
+// Card box in the carousel, with the page dots under it
 #define CARD_X  SCREEN_SAFE_INSET
 #define CARD_Y  UI_CONTENT_TOP
 #define CARD_W  (LCD_WIDTH - 2 * SCREEN_SAFE_INSET)
-#define CARD_H  188
-#define DOTS_Y  (CARD_Y + CARD_H + 12)
+#define CARD_H  208
+#define DOTS_Y  (CARD_Y + CARD_H + 13)
 
 CHomeScreen::CHomeScreen(CDevice &device) : CScreen(device) {
   pages[0] = new CMainPage(device);
   pages[1] = new CSettingsPage(device);
+  pages[2] = new CHelpPage(device);
 }
 
 CHomeScreen::~CHomeScreen() {
@@ -80,6 +82,22 @@ bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
   return false;
 }
 
+#ifdef TOUCH
+bool CHomeScreen::onTouch(TouchEvent event, int16_t x, int16_t y) {
+  if (opened) return false;
+  // Content follows the finger: swiping left pulls in the next card from the right
+  if (event == TouchEvent::SWIPE_LEFT) {
+    slide(1);
+    return true;
+  }
+  if (event == TouchEvent::SWIPE_RIGHT) {
+    slide(-1);
+    return true;
+  }
+  return false;
+}
+#endif
+
 void CHomeScreen::drawCard(Arduino_GFX &gfx, uint8_t page, int16_t dx) {
   const int16_t x = CARD_X + dx;
   gfx.fillRoundRect(x, CARD_Y, CARD_W, CARD_H, 18, UI_COLOR_PANEL);
@@ -90,10 +108,7 @@ void CHomeScreen::draw(Arduino_GFX &gfx) {
   UI_drawStatusBar(gfx, device);
 
   if (opened) {
-    CPage *page = pages[index];
-    UI_drawHeader(gfx, page->getHeader());
-    page->drawContent(gfx);
-    UI_drawHint(gfx, page->getHint());
+    pages[index]->drawContent(gfx);
     return;
   }
 
@@ -109,7 +124,6 @@ void CHomeScreen::draw(Arduino_GFX &gfx) {
   }
 
   UI_drawPageDots(gfx, DOTS_Y, HOME_PAGE_COUNT, index);
-  UI_drawHint(gfx, "PWR next   BOOT open");
 }
 
 #endif

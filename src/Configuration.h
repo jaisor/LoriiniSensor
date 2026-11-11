@@ -10,6 +10,7 @@
 #define WIFI        // 2.4Ghz WiFi, web server and OTA
 #define SCREEN      // On-board LCD
 #define BUZZER      // On-board passive buzzer, button sounds
+#define TOUCH       // CST816T touch panel (swipes in the carousel)
 
 //#define DISABLE_LOGGING
 #ifndef DISABLE_LOGGING

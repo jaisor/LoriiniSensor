@@ -4,6 +4,7 @@
 #include <atomic>
 #include "Configuration.h"
 #include "Button.h"
+#include "Touch.h"
 #ifdef BUZZER
   #include "Buzzer.h"
 #endif
@@ -95,6 +96,9 @@ private:
   unsigned long tsRestart;
 
   CButton buttons[(uint8_t)ButtonId::COUNT];
+  #ifdef TOUCH
+  CTouch touch;
+  #endif
   #ifdef BUZZER
   CBuzzer buzzer;
   #endif
@@ -106,6 +110,7 @@ private:
   void readBattery();
   void handleButtons();
   void onButton(ButtonId id, ButtonEvent event);
+  void handleTouch();
   void handlePowerOff();
   void handleRestart();
   void changed() { revision++; }

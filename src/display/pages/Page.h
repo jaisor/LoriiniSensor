@@ -12,21 +12,19 @@ enum class PageAction : uint8_t {
 };
 
 // One item of the home screen carousel. Shown two ways: as a card while browsing the carousel, and
-// full screen (under the status bar) once opened with BOOT.
-//
-// Buttons while a page is open go to onButton(). Conventions, so pages feel the same:
+// full screen (under the status bar) once opened with BOOT. There are no titles or button hints on
+// screen, so pages follow the same button conventions (the Help page explains them):
 //   PWR click = next item / increase, PWR double click = previous item / decrease,
 //   BOOT click = select / confirm, BOOT long press = back (EXIT when at the page's top level).
 //
-// Adding a page: subclass this and add it in CHomeScreen's constructor.
+// Adding a page: subclass this, add it in CHomeScreen's constructor and describe it on the Help page.
 class CPage {
 
 public:
   explicit CPage(CDevice &device) : device(device) {}
   virtual ~CPage() {}
 
-  // Card title in the carousel, and the default header once opened
-  virtual const char* getTitle() const = 0;
+  virtual const char* getTitle() const = 0;  // Card title in the carousel, and for logs
 
   // Carousel card contents inside the card's box. While sliding the box can be partly off-screen;
   // draw relative to x,y and the canvas clips the rest.
@@ -35,9 +33,7 @@ public:
   // Opened
   virtual void onOpen() {}
   virtual void onClose() {}
-  virtual const char* getHeader() const { return getTitle(); }  // e.g. the submenu being shown
-  virtual const char* getHint() const { return "Hold BOOT back"; }
-  // Content between UI_BODY_TOP and UI_BODY_BOTTOM; header, hint and status bar are drawn around it
+  // Content between UI_BODY_TOP and UI_BODY_BOTTOM; the status bar is drawn above it
   virtual void drawContent(Arduino_GFX &gfx) = 0;
   virtual PageAction onButton(ButtonId id, ButtonEvent event) = 0;
 

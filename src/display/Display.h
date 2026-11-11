@@ -32,6 +32,10 @@ public:
 
   // Button gesture, passed to the screen that is showing
   void onButton(ButtonId id, ButtonEvent event);
+  #ifdef TOUCH
+  // Touch gesture, passed to the screen that is showing; true if it acted on it
+  bool onTouch(TouchEvent event, int16_t x, int16_t y);
+  #endif
 
   // Overlay drawn on top of whatever screen is showing
   void showMessage(const char *message, unsigned long durationMs);

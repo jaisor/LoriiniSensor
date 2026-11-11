@@ -34,8 +34,8 @@ static uint8_t stepLevel(uint8_t value, int8_t dir, uint8_t minValue) {
 }
 
 void CSettingsPage::drawCard(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h) {
-  drawGearIcon(gfx, x + w / 2, y + 58, UI_COLOR_BLUE, UI_COLOR_PANEL);
-  UI_drawCentered(gfx, getTitle(), y + 118, UI_FONT_TITLE, UI_COLOR_TEXT, x, w);
+  drawGearIcon(gfx, x + w / 2, y + 66, UI_COLOR_BLUE, UI_COLOR_PANEL);
+  UI_drawCentered(gfx, getTitle(), y + 134, UI_FONT_TITLE, UI_COLOR_TEXT, x, w);
 
   const network_info_t &net = device.getNetworkInfo();
   const char *status;
@@ -46,8 +46,8 @@ void CSettingsPage::drawCard(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, 
     case DeviceState::WIFI_OFFLINE:    status = "WiFi offline"; color = UI_COLOR_ORANGE; break;
     default:                           status = "Connecting..."; color = UI_COLOR_YELLOW; break;
   }
-  UI_drawCentered(gfx, status, y + 150, UI_FONT_LABEL, color, x, w);
-  UI_drawCentered(gfx, net.ssid, y + 174, UI_FONT_SMALL, UI_COLOR_MUTED, x, w);
+  UI_drawCentered(gfx, status, y + 168, UI_FONT_LABEL, color, x, w);
+  UI_drawCentered(gfx, net.ssid, y + 192, UI_FONT_SMALL, UI_COLOR_MUTED, x, w);
 }
 
 void CSettingsPage::onOpen() {
@@ -72,25 +72,6 @@ void CSettingsPage::leaveLevelView() {
   if (levelChanged) {
     levelChanged = false;
     EEPROM_saveConfig();
-  }
-}
-
-const char* CSettingsPage::getHeader() const {
-  switch (view) {
-    case View::MENU:        return getTitle();
-    case View::FORGET_WIFI: return "Forget WiFi";
-    default:                return ITEM_LABELS[selected];
-  }
-}
-
-const char* CSettingsPage::getHint() const {
-  switch (view) {
-    case View::MENU:        return "BOOT select";
-    case View::NETWORK:        return canForgetWifi() ? "BOOT forget   Hold back" : "Hold BOOT back";
-    case View::FORGET_WIFI: return "BOOT yes   Hold cancel";
-    case View::BRIGHTNESS:
-    case View::VOLUME:      return "PWR +   2x -   BOOT ok";
-    default:                return "BOOT back";
   }
 }
 
@@ -169,18 +150,18 @@ void CSettingsPage::drawContent(Arduino_GFX &gfx) {
     case View::NETWORK:        drawWifi(gfx); break;
     case View::FORGET_WIFI: drawForgetWifi(gfx); break;
     case View::SENSOR:      drawSensor(gfx); break;
-    case View::BRIGHTNESS:  drawLevel(gfx, configuration.screenBrightness, nullptr); break;
-    case View::VOLUME:      drawLevel(gfx, configuration.buzzerVolume, "Off"); break;
+    case View::BRIGHTNESS:  drawLevel(gfx, "Screen brightness", configuration.screenBrightness, nullptr); break;
+    case View::VOLUME:      drawLevel(gfx, "Button sounds", configuration.buzzerVolume, "Off"); break;
     case View::ABOUT:       drawAbout(gfx); break;
   }
 }
 
 void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
-  const int16_t rowH = 28;
+  const int16_t rowH = 34;
   const int16_t left = SCREEN_SAFE_INSET + 6;
   const int16_t width = LCD_WIDTH - 2 * left;
   for (uint8_t i = 0; i < ITEM_COUNT; i++) {
-    int16_t y = UI_BODY_TOP + 2 + i * rowH;
+    int16_t y = UI_BODY_TOP + 6 + i * rowH;
     bool sel = i == selected;
     if (sel) {
       gfx.fillRoundRect(left, y, width, rowH - 2, 8, UI_COLOR_PANEL);
@@ -188,7 +169,7 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
     }
     gfx.setFont(UI_FONT_LABEL);
     gfx.setTextColor(sel ? UI_COLOR_TEXT : UI_COLOR_MUTED);
-    gfx.setCursor(left + 14, y + 19);
+    gfx.setCursor(left + 14, y + 22);
     gfx.print(ITEM_LABELS[i]);
 
     // Current value or a chevron on the right
@@ -202,7 +183,7 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
     if (value[0]) {
       uint16_t w = UI_textWidth(gfx, value, UI_FONT_SMALL);
       gfx.setTextColor(UI_COLOR_MUTED);
-      gfx.setCursor(left + width - 12 - w, y + 19);
+      gfx.setCursor(left + width - 12 - w, y + 22);
       gfx.print(value);
     } else if (i != ITEM_BACK) {
       UI_drawChevron(gfx, left + width - 16, y + rowH / 2 - 1, 5, 1, sel ? UI_COLOR_TEXT : UI_COLOR_DIVIDER);
@@ -215,70 +196,70 @@ void CSettingsPage::drawWifi(Arduino_GFX &gfx) {
   char line[48];
   switch (device.getState()) {
     case DeviceState::WIFI_CONNECTED:
-      drawField(gfx, UI_BODY_TOP + 20, "Network", net.ssid);
-      drawField(gfx, UI_BODY_TOP + 70, "Web server", net.ip, UI_COLOR_ACCENT);
+      drawField(gfx, UI_BODY_TOP + 26, "Network", net.ssid);
+      drawField(gfx, UI_BODY_TOP + 82, "Web server", net.ip, UI_COLOR_ACCENT);
       snprintf(line, sizeof(line), "%d dBm", net.rssi);
-      drawField(gfx, UI_BODY_TOP + 120, "Signal", line);
+      drawField(gfx, UI_BODY_TOP + 138, "Signal", line);
       break;
     case DeviceState::WIFI_AP_CREATED:
-      drawField(gfx, UI_BODY_TOP + 20, "Setup network", net.ssid, UI_COLOR_BLUE);
-      drawField(gfx, UI_BODY_TOP + 70, "Password", net.password);
+      drawField(gfx, UI_BODY_TOP + 26, "Setup network", net.ssid, UI_COLOR_BLUE);
+      drawField(gfx, UI_BODY_TOP + 82, "Password", net.password);
       snprintf(line, sizeof(line), "http://%s", net.ip);
-      drawField(gfx, UI_BODY_TOP + 120, "Then open", line, UI_COLOR_YELLOW);
+      drawField(gfx, UI_BODY_TOP + 138, "Then open", line, UI_COLOR_YELLOW);
       break;
     default:
-      drawField(gfx, UI_BODY_TOP + 20, device.getState() == DeviceState::WIFI_OFFLINE ? "Reconnecting to" : "Connecting to",
+      drawField(gfx, UI_BODY_TOP + 26, device.getState() == DeviceState::WIFI_OFFLINE ? "Reconnecting to" : "Connecting to",
         net.ssid, UI_COLOR_YELLOW);
-      UI_drawCentered(gfx, "Configure WiFi from the", UI_BODY_TOP + 90, UI_FONT_SMALL, UI_COLOR_MUTED);
-      UI_drawCentered(gfx, "web page in setup mode", UI_BODY_TOP + 110, UI_FONT_SMALL, UI_COLOR_MUTED);
+      UI_drawCentered(gfx, "Configure WiFi from the", UI_BODY_TOP + 100, UI_FONT_SMALL, UI_COLOR_MUTED);
+      UI_drawCentered(gfx, "web page in setup mode", UI_BODY_TOP + 120, UI_FONT_SMALL, UI_COLOR_MUTED);
       break;
-  }
-  if (canForgetWifi()) {
-    UI_drawCentered(gfx, "Forget it to join another", UI_BODY_BOTTOM - 6, UI_FONT_SMALL, UI_COLOR_MUTED);
   }
 }
 
 void CSettingsPage::drawForgetWifi(Arduino_GFX &gfx) {
   #ifdef WIFI
-  UI_drawCentered(gfx, "Forget network", UI_BODY_TOP + 30, UI_FONT_LABEL, UI_COLOR_TEXT);
-  UI_drawCentered(gfx, configuration.wifiSsid, UI_BODY_TOP + 54, UI_FONT_LABEL, UI_COLOR_ORANGE);
+  UI_drawCentered(gfx, "Forget network?", UI_BODY_TOP + 40, UI_FONT_TITLE, UI_COLOR_TEXT);
+  UI_drawCentered(gfx, configuration.wifiSsid, UI_BODY_TOP + 70, UI_FONT_LABEL, UI_COLOR_ORANGE);
   #endif
-  UI_drawCentered(gfx, "The device restarts in", UI_BODY_TOP + 96, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "setup mode, with its own", UI_BODY_TOP + 116, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "WiFi to set up a new one", UI_BODY_TOP + 136, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "The device restarts in", UI_BODY_TOP + 112, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "setup mode, with its own", UI_BODY_TOP + 132, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "WiFi to set up a new one", UI_BODY_TOP + 152, UI_FONT_SMALL, UI_COLOR_MUTED);
 }
 
 void CSettingsPage::drawSensor(Arduino_GFX &gfx) {
   // TODO: list the supported sensors to choose from, and the chosen one's settings (interval, calibration)
-  UI_drawCentered(gfx, "No sensors yet", UI_BODY_TOP + 50, UI_FONT_LABEL, UI_COLOR_TEXT);
-  UI_drawCentered(gfx, "Sensor selection and", UI_BODY_TOP + 90, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "configuration will be", UI_BODY_TOP + 110, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "here", UI_BODY_TOP + 130, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "Sensor", UI_BODY_TOP + 60, UI_FONT_TITLE, UI_COLOR_TEXT);
+  UI_drawCentered(gfx, "No sensors yet", UI_BODY_TOP + 100, UI_FONT_LABEL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "Sensor selection and", UI_BODY_TOP + 140, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "configuration will be", UI_BODY_TOP + 160, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, "here", UI_BODY_TOP + 180, UI_FONT_SMALL, UI_COLOR_MUTED);
 }
 
-void CSettingsPage::drawLevel(Arduino_GFX &gfx, uint8_t value, const char *offText) {
+void CSettingsPage::drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value, const char *offText) {
   char text[8];
   if (value == 0 && offText) {
     strlcpy(text, offText, sizeof(text));
   } else {
     snprintf(text, sizeof(text), "%u%%", value);
   }
-  UI_drawCentered(gfx, text, UI_BODY_TOP + 70, UI_FONT_LARGE, value ? UI_COLOR_TEXT : UI_COLOR_MUTED);
+  UI_drawCentered(gfx, label, UI_BODY_TOP + 50, UI_FONT_LABEL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, text, UI_BODY_TOP + 104, UI_FONT_LARGE, value ? UI_COLOR_TEXT : UI_COLOR_MUTED);
   const int16_t w = 160;
-  UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, UI_BODY_TOP + 96, w, 12, value, UI_COLOR_ACCENT);
-  UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, UI_BODY_TOP + 102, 5, -1, UI_COLOR_MUTED);
-  UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, UI_BODY_TOP + 102, 5, 1, UI_COLOR_MUTED);
+  const int16_t barY = UI_BODY_TOP + 130;
+  UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, barY, w, 12, value, UI_COLOR_ACCENT);
+  UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, barY + 6, 5, -1, UI_COLOR_MUTED);
+  UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, barY + 6, 5, 1, UI_COLOR_MUTED);
 }
 
 void CSettingsPage::drawAbout(Arduino_GFX &gfx) {
   char line[48];
-  drawField(gfx, UI_BODY_TOP + 14, "Name", configuration.name);
-  drawField(gfx, UI_BODY_TOP + 58, "Version", VERSION_SHORT);
+  drawField(gfx, UI_BODY_TOP + 26, "Name", configuration.name);
+  drawField(gfx, UI_BODY_TOP + 78, "Version", VERSION_SHORT);
   unsigned long sec = CONFIG_getUpTime() / 1000;
   snprintf(line, sizeof(line), "%lud %02lu:%02lu", sec / 86400, (sec / 3600) % 24, (sec / 60) % 60);
-  drawField(gfx, UI_BODY_TOP + 102, "Uptime", line);
+  drawField(gfx, UI_BODY_TOP + 130, "Uptime", line);
   snprintf(line, sizeof(line), "%u KB / %u KB", (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getFreePsram() / 1024));
-  drawField(gfx, UI_BODY_TOP + 146, "Free heap / PSRAM", line);
+  drawField(gfx, UI_BODY_TOP + 182, "Free heap / PSRAM", line);
 }
 
 #endif
