@@ -92,8 +92,7 @@ const char htmlBottom[] = R"=====(
 )=====";
 
 // state, network label, SSID, IP, RSSI, signal %, local time, uptime d h m s,
-// sensor type, sensor status, voltage, current, power (the last three refresh from /api),
-// battery V, heap free/total KB, PSRAM free/total KB
+// battery V, heap free/total KB, PSRAM free/total KB (the sensors are filled in from /api)
 const char htmlMain[] = R"=====(
       <h3>Status</h3>
       <fieldset>
@@ -113,28 +112,40 @@ const char htmlMain[] = R"=====(
         <label>Uptime <kbd>%ud %02u:%02u:%02u</kbd></label>
       </fieldset>
       <fieldset>
-        <legend><strong>📈 Sensor</strong></legend>
-        <label><kbd>%s</kbd> <kbd id='sensorStatus'>%s</kbd></label>
-        <br/>
-        <label>Voltage <kbd id='sensorVoltage'>%s</kbd></label>
-        <br/>
-        <label>Current <kbd id='sensorCurrent'>%s</kbd></label>
-        <br/>
-        <label>Power <kbd id='sensorPower'>%s</kbd></label>
+        <legend><strong>📈 Sensors</strong></legend>
+        <div id='sensors'><small>Loading...</small></div>
       </fieldset>
       <script>
-        // Live sensor values while the page is open
-        setInterval(function () {
+        // Sensor values from /api, refreshed every second while the page is open
+        function fixed(x, digits) { return x === undefined ? '-' : x.toFixed(digits); }
+        function current(a) { return Math.abs(a) < 1 ? (a * 1000).toFixed(1) + ' mA' : a.toFixed(3) + ' A'; }
+        function power(w) { return Math.abs(w) < 1 ? (w * 1000).toFixed(0) + ' mW' : w.toFixed(2) + ' W'; }
+        function gas(ohm) { return ohm >= 1e6 ? (ohm / 1e6).toFixed(2) + ' M&Omega;' : (ohm / 1e3).toFixed(1) + ' k&Omega;'; }
+        function row(label, value) { return '<br/><label>' + label + ' <kbd>' + value + '</kbd></label>'; }
+        function renderSensor(s) {
+          var html = '<p><label><kbd>' + s.name + ' 0x' + s.address.toString(16).toUpperCase() + '</kbd> <kbd>' + s.status + '</kbd></label>';
+          if (s.channels) {
+            s.channels.forEach(function (c, i) {
+              var label = s.channels.length > 1 ? 'Channel ' + (i + 1) : 'Power';
+              html += row(label, c.voltage_v.toFixed(2) + ' V') + ' <kbd>' + current(c.current_a) + (c.over_range ? ' (over range)' : '')
+                + '</kbd> <kbd>' + power(c.power_w) + '</kbd>';
+            });
+          }
+          if (s.temperature_c !== undefined) html += row('Temperature', fixed(s.temperature_c, 1) + ' &deg;C');
+          if (s.humidity_pct !== undefined) html += row('Humidity', fixed(s.humidity_pct, 1) + ' %%');
+          if (s.pressure_hpa !== undefined) html += row('Pressure', fixed(s.pressure_hpa, 1) + ' hPa');
+          if (s.gas_ohm !== undefined) html += row('Gas resistance', gas(s.gas_ohm));
+          return html + '</p>';
+        }
+        function refreshSensors() {
           fetch('api').then(function (r) { return r.json(); }).then(function (j) {
-            var s = j.sensor;
-            if (!s) return;
-            document.getElementById('sensorStatus').textContent = s.status;
-            var ok = s.status == 'ok' && s.voltage_v !== undefined;
-            document.getElementById('sensorVoltage').textContent = ok ? s.voltage_v.toFixed(2) + ' V' : '-';
-            document.getElementById('sensorCurrent').textContent = ok ? (s.current_a * 1000).toFixed(1) + ' mA' + (s.over_range ? ' (over range)' : '') : '-';
-            document.getElementById('sensorPower').textContent = ok ? (s.power_w * 1000).toFixed(0) + ' mW' : '-';
+            var list = j.sensors || [];
+            document.getElementById('sensors').innerHTML = list.length ? list.map(renderSensor).join('')
+              : '<small>None found. Connect sensors to the I2C bus (SDA GPIO 11, SCL GPIO 10, 3.3V); they are detected within seconds.</small>';
           }).catch(function () {});
-        }, 1000);
+        }
+        refreshSensors();
+        setInterval(refreshSensors, 1000);
       </script>
       <fieldset>
         <legend><strong>🔋 Power and memory</strong></legend>
@@ -173,7 +184,7 @@ const char htmlWifi[] = R"=====(
 
 // board, chip model, revision, flash MB, PSRAM MB, MAC, name, timezone options,
 // brightness min, brightness value, brightness value (label), volume, volume (label),
-// sensor type options, INA219 address options, INA219 shunt mOhm, export file name
+// detected sensors (HTML), INA219 shunt mOhm, INA3221 shunt mOhm, export file name
 const char htmlDevice[] = R"=====(
       <h3>Device Settings</h3>
       <fieldset>
@@ -212,25 +223,20 @@ const char htmlDevice[] = R"=====(
           </label>
         </fieldset>
         <fieldset>
-          <legend><strong>📈 Sensor</strong></legend>
-          <label>
-            Sensor
-            <select name='sensorType' id='sensorType'>
-              %s
-            </select>
-            <sub><small>On the I2C bus: SDA GPIO 11, SCL GPIO 10, 3.3V</small></sub>
-          </label>
-          <label>
-            INA219 I2C address
-            <select name='ina219Address' id='ina219Address'>
-              %s
-            </select>
-            <sub><small>0x40 with A0 and A1 open; the straps select 0x40-0x4F</small></sub>
-          </label>
+          <legend><strong>📈 Sensors</strong></legend>
+          <label>Detected %s</label>
+          <sub><small>Found automatically on the I2C bus (SDA GPIO 11, SCL GPIO 10, 3.3V): INA219, INA3221, BME280,
+            BMP280, BME680, BME688, AHT10, AHT20. Several at once work as long as their addresses differ.</small></sub>
+          <br/><br/>
           <label>
             INA219 shunt resistor (milliohm)
             <input type='number' id='ina219ShuntMilliOhm' name='ina219ShuntMilliOhm' min='1' max='10000' value='%u'>
             <sub><small>Common breakout boards have an R100 (100 milliohm) shunt: up to 3.2A at 0.1mA steps</small></sub>
+          </label>
+          <label>
+            INA3221 shunt resistors (milliohm, all channels)
+            <input type='number' id='ina3221ShuntMilliOhm' name='ina3221ShuntMilliOhm' min='1' max='10000' value='%u'>
+            <sub><small>Common boards have R100 (100 milliohm) shunts: up to 1.6A at 0.4mA steps</small></sub>
           </label>
         </fieldset>
         <button type='submit' value='Submit'>Save</button>

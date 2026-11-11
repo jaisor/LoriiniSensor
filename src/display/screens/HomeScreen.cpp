@@ -6,9 +6,13 @@
 #include <ArduinoLog.h>
 #include "Device.h"
 #include "display/UI.h"
-#include "display/pages/MainPage.h"
+#include "display/pages/NoSensorPage.h"
 #include "display/pages/SettingsPage.h"
 #include "display/pages/HelpPage.h"
+#ifdef SENSORS
+  #include "display/pages/PowerPage.h"
+  #include "display/pages/EnvPage.h"
+#endif
 
 #define SLIDE_MS 240
 
@@ -19,19 +23,111 @@
 #define CARD_H  208
 #define DOTS_Y  (CARD_Y + CARD_H + 13)
 
-CHomeScreen::CHomeScreen(CDevice &device) : CScreen(device) {
-  pages[0] = new CMainPage(device);
-  pages[1] = new CSettingsPage(device);
-  pages[2] = new CHelpPage(device);
+CHomeScreen::CHomeScreen(CDevice &device) : CScreen(device), pages{} {
+  noSensors = new CNoSensorPage(device);
+  settings = new CSettingsPage(device);
+  help = new CHelpPage(device);
+  #ifdef SENSORS
+  for (CSensorPage *&p : sensorPages) {
+    p = nullptr;
+  }
+  #endif
+  syncSensorPages();
 }
 
 CHomeScreen::~CHomeScreen() {
-  for (CPage *p : pages) {
-    delete p;
+  #ifdef SENSORS
+  for (uint8_t i = 0; i < sensorPageCount; i++) {
+    delete sensorPages[i];
   }
+  #endif
+  delete noSensors;
+  delete settings;
+  delete help;
+}
+
+void CHomeScreen::syncSensorPages() {
+  CPage *shown = pageCount ? pages[index] : nullptr;
+
+  #ifdef SENSORS
+  const CSensors &sensors = device.getSensors();
+  sensorListRevision = sensors.getListRevision();
+
+  // Keep the pages of sensors still there (in the sensors' order), make pages for new ones
+  CSensorPage *next[HOME_SENSOR_PAGES] = {};
+  uint8_t n = 0;
+  for (uint8_t i = 0; i < sensors.getCount() && n < HOME_SENSOR_PAGES; i++) {
+    const CSensor *s = sensors.get(i);
+    CSensorPage *page = nullptr;
+    for (uint8_t j = 0; j < sensorPageCount; j++) {
+      if (sensorPages[j] && sensorPages[j]->getSensorId() == s->getId()) {
+        page = sensorPages[j];
+        sensorPages[j] = nullptr;
+        break;
+      }
+    }
+    if (!page) {
+      if (s->getKind() == SensorKind::POWER) {
+        page = new CPowerPage(device, *static_cast<const CPowerSensor*>(s));
+      } else {
+        page = new CEnvPage(device, *static_cast<const CEnvSensor*>(s));
+      }
+    }
+    next[n++] = page;
+  }
+  // What's left belongs to dropped sensors
+  for (uint8_t j = 0; j < sensorPageCount; j++) {
+    if (sensorPages[j]) {
+      if (opened && shown == sensorPages[j]) {
+        opened = false;   // Its sensor is gone
+      }
+      if (shown == sensorPages[j]) {
+        shown = nullptr;
+      }
+      delete sensorPages[j];
+    }
+  }
+  for (uint8_t j = 0; j < HOME_SENSOR_PAGES; j++) {
+    sensorPages[j] = next[j];
+  }
+  sensorPageCount = n;
+  #else
+  const uint8_t n = 0;
+  #endif
+
+  pageCount = 0;
+  #ifdef SENSORS
+  for (uint8_t i = 0; i < n; i++) {
+    pages[pageCount++] = sensorPages[i];
+  }
+  #endif
+  if (n == 0) {
+    pages[pageCount++] = noSensors;
+  }
+  pages[pageCount++] = settings;
+  pages[pageCount++] = help;
+
+  // Stay on the page that was showing; if it went away, show the first one
+  index = 0;
+  for (uint8_t i = 0; i < pageCount; i++) {
+    if (pages[i] == shown) {
+      index = i;
+      break;
+    }
+  }
+  if (opened && pages[index] != shown) {
+    opened = false;   // The "none found" page gave way to sensor pages
+  }
+  sliding = false;
+  invalidate();
 }
 
 bool CHomeScreen::update() {
+  #ifdef SENSORS
+  if (device.getSensors().getListRevision() != sensorListRevision) {
+    syncSensorPages();
+  }
+  #endif
   bool redraw = CScreen::update();
   if (sliding) {
     if (millis() - tsSlide >= SLIDE_MS) {
@@ -42,9 +138,20 @@ bool CHomeScreen::update() {
   return pages[index]->update() || redraw;
 }
 
+void CHomeScreen::open() {
+  sliding = false;
+  opened = true;
+  pages[index]->onOpen();
+}
+
+void CHomeScreen::close() {
+  pages[index]->onClose();
+  opened = false;
+}
+
 void CHomeScreen::slide(int8_t dir) {
   slideFrom = index;
-  index = (index + HOME_PAGE_COUNT + dir) % HOME_PAGE_COUNT;
+  index = (index + pageCount + dir) % pageCount;
   slideDir = dir;
   sliding = true;
   tsSlide = millis();
@@ -55,8 +162,7 @@ bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
   if (opened) {
     switch (pages[index]->onButton(id, event)) {
       case PageAction::EXIT:
-        pages[index]->onClose();
-        opened = false;
+        close();
         return true;
       case PageAction::REDRAW:
         return true;
@@ -74,9 +180,7 @@ bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
     return true;
   }
   if (id == ButtonId::BOOT && event == ButtonEvent::CLICK) {
-    sliding = false;
-    opened = true;
-    pages[index]->onOpen();
+    open();
     return true;
   }
   return false;
@@ -87,16 +191,13 @@ bool CHomeScreen::onTouch(TouchEvent event, int16_t x, int16_t y) {
   if (opened) {
     // Long press leaves the page from wherever it is (submenus included)
     if (event == TouchEvent::LONG_PRESS) {
-      pages[index]->onClose();
-      opened = false;
+      close();
       return true;
     }
     return false;
   }
   if (event == TouchEvent::DOUBLE_TAP) {
-    sliding = false;
-    opened = true;
-    pages[index]->onOpen();
+    open();
     return true;
   }
   // Content follows the finger: swiping left pulls in the next card from the right
@@ -137,7 +238,7 @@ void CHomeScreen::draw(Arduino_GFX &gfx) {
     drawCard(gfx, index, 0);
   }
 
-  UI_drawPageDots(gfx, DOTS_Y, HOME_PAGE_COUNT, index);
+  UI_drawPageDots(gfx, DOTS_Y, pageCount, index);
 }
 
 #endif

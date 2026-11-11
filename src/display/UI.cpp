@@ -131,6 +131,92 @@ void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index)
   }
 }
 
+uint16_t UI_unitWidth(Arduino_GFX &gfx, const char *unit, const GFXfont *font) {
+  if (unit[0] != '^') {
+    return UI_textWidth(gfx, unit, font);
+  }
+  const int16_t r = font == UI_FONT_LARGE ? 5 : font == UI_FONT_TITLE ? 4 : 3;
+  return 2 * r + 2 + (unit[1] ? UI_textWidth(gfx, unit + 1, font) : 0);
+}
+
+void UI_drawValue(Arduino_GFX &gfx, int16_t cx, int16_t y, const char *value, const char *unit,
+    const GFXfont *valueFont, const GFXfont *unitFont, uint16_t color) {
+  const int16_t gap = 5;
+  const int16_t wv = UI_textWidth(gfx, value, valueFont);
+  const int16_t wu = UI_unitWidth(gfx, unit, unitFont);
+  int16_t x = cx - (wv + gap + wu) / 2;
+  gfx.setTextColor(color);
+  gfx.setFont(valueFont);
+  gfx.setCursor(x, y);
+  gfx.print(value);
+  x += wv + gap;
+
+  if (unit[0] == '^') {
+    // Ring at the top of the unit's capitals, like a degree sign
+    int16_t x1, y1;
+    uint16_t w, h;
+    gfx.setFont(unitFont);
+    gfx.getTextBounds("C", 0, y, &x1, &y1, &w, &h);
+    const int16_t r = unitFont == UI_FONT_LARGE ? 5 : unitFont == UI_FONT_TITLE ? 4 : 3;
+    gfx.drawCircle(x + r, y1 + r, r, UI_COLOR_MUTED);
+    gfx.drawCircle(x + r, y1 + r, r - 1, UI_COLOR_MUTED);
+    x += 2 * r + 2;
+    unit++;
+  }
+  gfx.setTextColor(UI_COLOR_MUTED);
+  gfx.setFont(unitFont);
+  gfx.setCursor(x, y);
+  gfx.print(unit);
+}
+
+void UI_drawGraph(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t count, uint8_t capacity,
+    std::function<float(uint8_t)> value, float minSpan, uint16_t color) {
+  gfx.fillRoundRect(x, y, w, h, 8, UI_COLOR_PANEL);
+  if (count < 2 || capacity < 2) return;
+
+  float lo = NAN, hi = NAN;
+  for (uint8_t i = 0; i < count; i++) {
+    float v = value(i);
+    if (isnan(v)) continue;
+    lo = isnan(lo) ? v : min(lo, v);
+    hi = isnan(hi) ? v : max(hi, v);
+  }
+  if (isnan(lo)) return;
+  if (hi - lo < minSpan) {
+    float mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2;
+    hi = mid + minSpan / 2;
+  }
+
+  const int16_t pad = 6;
+  const int16_t gx = x + pad, gy = y + pad, gw = w - 2 * pad, gh = h - 2 * pad;
+  if (lo < 0 && hi > 0) {
+    int16_t zy = gy + gh - (int16_t)((0 - lo) / (hi - lo) * gh);
+    gfx.drawFastHLine(gx, zy, gw, UI_COLOR_DIVIDER);
+  }
+
+  bool havePrev = false;
+  int16_t px = 0, py = 0;
+  for (uint8_t i = 0; i < count; i++) {
+    float v = value(i);
+    if (isnan(v)) {
+      havePrev = false;
+      continue;
+    }
+    int16_t sx = gx + gw - (int16_t)((count - 1 - i) * (int32_t)gw / (capacity - 1));
+    int16_t sy = gy + gh - (int16_t)((v - lo) / (hi - lo) * gh);
+    if (havePrev) {
+      gfx.drawLine(px, py, sx, sy, color);
+      gfx.drawLine(px, py + 1, sx, sy + 1, color);
+    } else {
+      gfx.fillRect(sx, sy, 2, 2, color);  // A lone point stays visible
+    }
+    havePrev = true;
+    px = sx;
+    py = sy;
+  }
+}
+
 void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color) {
   gfx.fillRoundRect(x, y, w, h, h / 2, UI_COLOR_DIVIDER);
   int16_t fill = w * min<uint8_t>(percent, 100) / 100;

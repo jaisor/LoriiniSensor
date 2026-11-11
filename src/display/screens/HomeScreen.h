@@ -2,10 +2,20 @@
 
 #include "display/Screen.h"
 #include "display/pages/Page.h"
+#ifdef SENSORS
+  #include "sensors/Sensors.h"
+  #define HOME_SENSOR_PAGES SENSOR_MAX
+#else
+  #define HOME_SENSOR_PAGES 0
+#endif
 
-#define HOME_PAGE_COUNT 3
+#define HOME_MAX_PAGES (HOME_SENSOR_PAGES + 3)   // Sensors (or the "none found" page), Settings, Help
 
-// Status bar over a carousel of pages (Main, Settings, Help).
+class CSensorPage;
+
+// Status bar over a carousel of pages: one per detected sensor (or a "none found" page), Settings,
+// Help. The sensor pages follow CSensors: added and dropped as sensors come and go, while the page
+// being shown stays in place.
 //   Browsing: PWR click or swipe left = next page (slides in from the right), PWR double click or swipe
 //             right = previous, BOOT click or double tap = open.
 //   Opened:   buttons go to the page; it returns PageAction::EXIT (BOOT long press by convention) to browse
@@ -25,9 +35,19 @@ public:
   #endif
 
 private:
-  CPage *pages[HOME_PAGE_COUNT];
+  CPage *pages[HOME_MAX_PAGES];   // The carousel, in order
+  uint8_t pageCount = 0;
   uint8_t index = 0;
   bool opened = false;
+
+  CPage *noSensors;
+  CPage *settings;
+  CPage *help;
+  #ifdef SENSORS
+  CSensorPage *sensorPages[HOME_SENSOR_PAGES];
+  uint8_t sensorPageCount = 0;
+  uint32_t sensorListRevision = UINT32_MAX;
+  #endif
 
   // Slide between cards
   bool sliding = false;
@@ -35,6 +55,9 @@ private:
   uint8_t slideFrom = 0;
   unsigned long tsSlide = 0;
 
+  void syncSensorPages();       // Pages for the sensors CSensors has now
+  void open();
+  void close();
   void slide(int8_t dir);
   void drawCard(Arduino_GFX &gfx, uint8_t page, int16_t dx);
 };

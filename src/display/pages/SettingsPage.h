@@ -4,7 +4,7 @@
 
 // Menu of device settings, each opening its own view:
 //   WiFi        network details; forget the network to restart in setup mode
-//   Sensor      which sensor to run (PWR cycles the types), its status, address and shunt
+//   Sensors     the detected sensors, their addresses and whether they answer
 //   Brightness  backlight level, live
 //   Sound       button sounds volume, live
 //   About       name, version, memory, uptime
@@ -29,7 +29,7 @@ private:
 
   View view = View::MENU;
   uint8_t selected = 0;
-  bool levelChanged = false;   // Brightness / volume / sensor edited, saved when leaving the view
+  bool levelChanged = false;   // Brightness / volume edited, saved when leaving the view
 
   bool canForgetWifi() const;
   void leaveLevelView();
@@ -37,7 +37,7 @@ private:
   void drawMenu(Arduino_GFX &gfx);
   void drawWifi(Arduino_GFX &gfx);
   void drawForgetWifi(Arduino_GFX &gfx);
-  void drawSensor(Arduino_GFX &gfx);
+  void drawSensors(Arduino_GFX &gfx);
   void drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value, const char *offText);
   void drawAbout(Arduino_GFX &gfx);
 };

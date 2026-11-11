@@ -5,6 +5,7 @@
 #ifdef SCREEN
 
 #include <Arduino_GFX_Library.h>
+#include <functional>
 #include "display/Fonts.h"
 
 class CDevice;
@@ -58,6 +59,18 @@ void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device);
 
 // Carousel position: count dots centered on cy, index highlighted
 void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index);
+
+// Value and its unit on one baseline, centered on cx. A unit starting with '^' gets a degree ring
+// for the '^' (the fonts have no degree sign), e.g. "^C".
+void UI_drawValue(Arduino_GFX &gfx, int16_t cx, int16_t y, const char *value, const char *unit,
+  const GFXfont *valueFont, const GFXfont *unitFont, uint16_t color);
+uint16_t UI_unitWidth(Arduino_GFX &gfx, const char *unit, const GFXfont *font);
+
+// Line graph of count values (value(0) oldest) in a panel, newest at the right edge. capacity is the
+// full history length, so a partial history starts part way in. Scaled to the values' own range, at
+// least minSpan tall; NAN values leave a gap. A zero line is drawn when the range crosses zero.
+void UI_drawGraph(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t count, uint8_t capacity,
+  std::function<float(uint8_t)> value, float minSpan, uint16_t color);
 
 // Horizontal level bar, e.g. brightness
 void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color);

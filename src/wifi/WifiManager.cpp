@@ -24,11 +24,33 @@ static int dBmtoPercentage(int dBm) {
 }
 
 #ifdef SENSORS
-static const char* sensorStatusId(SensorStatus status) {
-  switch (status) {
-    case SensorStatus::OK:        return "ok";
-    case SensorStatus::NOT_FOUND: return "not found";
-    default:                      return "off";
+// One sensor as JSON: what it is, whether it answers, and its latest values
+static void sensorToJson(const CSensor &s, JsonObject o) {
+  o["model"] = SENSOR_modelId(s.getModel());
+  o["name"] = s.getName();
+  o["address"] = s.getAddress();
+  o["kind"] = s.getKind() == SensorKind::POWER ? "power" : "environment";
+  o["status"] = s.isOnline() ? "ok" : "offline";
+  if (!s.hasValues()) return;
+  if (s.getKind() == SensorKind::POWER) {
+    const CPowerSensor &p = static_cast<const CPowerSensor&>(s);
+    JsonArray channels = o["channels"].to<JsonArray>();
+    for (uint8_t ch = 0; ch < p.getChannelCount(); ch++) {
+      const power_reading_t &r = p.getReading(ch);
+      JsonObject c = channels.add<JsonObject>();
+      c["voltage_v"] = r.voltage;
+      c["current_a"] = r.current;
+      c["power_w"] = r.power;
+      c["over_range"] = r.overRange;
+    }
+  } else {
+    const CEnvSensor &e = static_cast<const CEnvSensor&>(s);
+    for (uint8_t i = 0; i < ENV_VALUE_COUNT; i++) {
+      const EnvValue v = (EnvValue)i;
+      if (e.has(v) && !isnan(e.get(v))) {
+        o[SENSOR_envValueId(v)] = e.get(v);
+      }
+    }
   }
 }
 #endif
@@ -292,26 +314,6 @@ void CWifiManager::handleRoot(AsyncWebServerRequest *request) {
 
   unsigned long sec = CONFIG_getUpTime() / 1000;
 
-  // Sensor
-  const char *sensorType = SENSOR_TYPE_NAMES[configuration.sensorType];
-  const char *sensorStatus = "off";
-  char sensorVoltage[24] = "-", sensorCurrent[32] = "-", sensorPower[24] = "-";
-  #ifdef SENSORS
-  const CSensors &sensors = device->getSensors();
-  sensorStatus = sensorStatusId(sensors.getStatus());
-  const sensor_readings_t &r = sensors.getReadings();
-  if (sensors.getStatus() == SensorStatus::OK && r.valid) {
-    char v[16];
-    const char *unit;
-    SENSOR_formatVoltage(r.voltage, v, sizeof(v), &unit);
-    snprintf(sensorVoltage, sizeof(sensorVoltage), "%s %s", v, unit);
-    SENSOR_formatCurrent(r.current, v, sizeof(v), &unit);
-    snprintf(sensorCurrent, sizeof(sensorCurrent), "%s %s%s", v, unit, r.overRange ? " (over range)" : "");
-    SENSOR_formatPower(r.power, v, sizeof(v), &unit);
-    snprintf(sensorPower, sizeof(sensorPower), "%s %s", v, unit);
-  }
-  #endif
-
   AsyncResponseStream *response = request->beginResponseStream("text/html; charset=UTF-8", 6144);
   printHTMLTop(response);
   response->printf(htmlMain,
@@ -321,7 +323,6 @@ void CWifiManager::handleRoot(AsyncWebServerRequest *request) {
     isApMode() ? 0 : WiFi.RSSI(), isApMode() ? 0 : dBmtoPercentage(WiFi.RSSI()),
     currentTimeStr.c_str(),
     (unsigned)(sec / 86400), (unsigned)((sec / 3600) % 24), (unsigned)((sec / 60) % 60), (unsigned)(sec % 60),
-    sensorType, sensorStatus, sensorVoltage, sensorCurrent, sensorPower,
     device->getBatteryVoltage(),
     (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getHeapSize() / 1024),
     (unsigned)(ESP.getFreePsram() / 1024), (unsigned)(ESP.getPsramSize() / 1024)
@@ -402,18 +403,14 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       configuration.buzzerVolume = constrain(v, 0, 100);
     }
 
-    // Sensor, picked up live by CSensors
-    if (request->hasArg("sensorType")) {
-      long t = request->arg("sensorType").toInt();
-      if (t >= 0 && t < SENSOR_TYPE_COUNT) configuration.sensorType = t;
-    }
-    if (request->hasArg("ina219Address")) {
-      long addr = request->arg("ina219Address").toInt();
-      if (addr >= INA219_ADDRESS_MIN && addr <= INA219_ADDRESS_MAX) configuration.ina219Address = addr;
-    }
+    // Shunts, used from the next reading on
     if (request->hasArg("ina219ShuntMilliOhm")) {
       long mohm = request->arg("ina219ShuntMilliOhm").toInt();
-      if (mohm >= 1 && mohm <= INA219_MAX_SHUNT_MOHM) configuration.ina219ShuntMilliOhm = mohm;
+      if (mohm >= 1 && mohm <= INA_MAX_SHUNT_MOHM) configuration.ina219ShuntMilliOhm = mohm;
+    }
+    if (request->hasArg("ina3221ShuntMilliOhm")) {
+      long mohm = request->arg("ina3221ShuntMilliOhm").toInt();
+      if (mohm >= 1 && mohm <= INA_MAX_SHUNT_MOHM) configuration.ina3221ShuntMilliOhm = mohm;
     }
 
     #ifdef SCREEN
@@ -451,17 +448,17 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
     brightnessMin = SCREEN_MIN_BRIGHTNESS;
     #endif
 
-    String sensorOptions;
-    for (uint8_t i = 0; i < SENSOR_TYPE_COUNT; i++) {
-      sensorOptions += String("<option value='") + i + "'" + (i == configuration.sensorType ? " selected" : "") + ">"
-        + SENSOR_TYPE_NAMES[i] + "</option>";
-    }
-    String addressOptions;
-    for (uint8_t addr = INA219_ADDRESS_MIN; addr <= INA219_ADDRESS_MAX; addr++) {
-      char label[8];
-      snprintf(label, sizeof(label), "0x%02X", addr);
-      addressOptions += String("<option value='") + addr + "'" + (addr == configuration.ina219Address ? " selected" : "") + ">"
-        + label + "</option>";
+    // Detected sensors, as a list
+    String sensorList;
+    #ifdef SENSORS
+    device->getSensors().forEach([&sensorList](const CSensor &s) {
+      char item[64];
+      snprintf(item, sizeof(item), "<kbd>%s 0x%02X%s</kbd> ", s.getName(), s.getAddress(), s.isOnline() ? "" : " (offline)");
+      sensorList += item;
+    });
+    #endif
+    if (!sensorList.length()) {
+      sensorList = "<kbd>none found</kbd>";
     }
 
     AsyncResponseStream *response = request->beginResponseStream("text/html; charset=UTF-8", 8192);
@@ -474,7 +471,7 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       configuration.name, tzOptions.c_str(),
       brightnessMin, brightness, brightness,
       configuration.buzzerVolume, configuration.buzzerVolume,
-      sensorOptions.c_str(), addressOptions.c_str(), (unsigned)configuration.ina219ShuntMilliOhm,
+      sensorList.c_str(), (unsigned)configuration.ina219ShuntMilliOhm, (unsigned)configuration.ina3221ShuntMilliOhm,
       configuration.name);
     printHTMLBottom(response);
     request->send(response);
@@ -520,20 +517,11 @@ void CWifiManager::fillStatusJson(JsonDocument &json) {
     json["wifi_percent"] = dBmtoPercentage(WiFi.RSSI());
   }
   json["battery_v"] = device->getBatteryVoltage();
-  JsonObject sensor = json["sensor"].to<JsonObject>();
-  sensor["type"] = SENSOR_TYPE_IDS[configuration.sensorType];
+  JsonArray sensors = json["sensors"].to<JsonArray>();
   #ifdef SENSORS
-  const CSensors &sensors = device->getSensors();
-  sensor["status"] = sensorStatusId(sensors.getStatus());
-  const sensor_readings_t &r = sensors.getReadings();
-  if (sensors.getStatus() == SensorStatus::OK && r.valid) {
-    sensor["voltage_v"] = r.voltage;
-    sensor["current_a"] = r.current;
-    sensor["power_w"] = r.power;
-    sensor["over_range"] = r.overRange;
-  }
-  #else
-  sensor["status"] = "off";
+  device->getSensors().forEach([&sensors](const CSensor &s) {
+    sensorToJson(s, sensors.add<JsonObject>());
+  });
   #endif
   json["uptime_millis"] = CONFIG_getUpTime();
   json["heap_free"] = ESP.getFreeHeap();
@@ -552,7 +540,7 @@ void CWifiManager::handleRestAPI_Status(AsyncWebServerRequest *request) {
   Log.traceln("handleRestAPI_Status");
   JsonDocument json;
   fillStatusJson(json);
-  AsyncResponseStream *response = request->beginResponseStream("application/json; charset=UTF-8", 1024);
+  AsyncResponseStream *response = request->beginResponseStream("application/json; charset=UTF-8", 2048);
   serializeJson(json, *response);
   request->send(response);
 }
@@ -576,9 +564,8 @@ void CWifiManager::handleRestAPI_Config(AsyncWebServerRequest *request) {
   configJson["screenBrightness"] = configuration.screenBrightness;
   #endif
   configJson["buzzerVolume"] = configuration.buzzerVolume;
-  configJson["sensorType"] = SENSOR_TYPE_IDS[configuration.sensorType];
-  configJson["ina219Address"] = configuration.ina219Address;
   configJson["ina219ShuntMilliOhm"] = configuration.ina219ShuntMilliOhm;
+  configJson["ina3221ShuntMilliOhm"] = configuration.ina3221ShuntMilliOhm;
 
   AsyncResponseStream *response = request->beginResponseStream("application/json; charset=UTF-8", 1024);
   serializeJson(configJson, *response);
@@ -672,30 +659,19 @@ bool CWifiManager::updateConfigFromJson(JsonDocument jsonObj, String *error) {
     c.buzzerVolume = v;
   }
 
-  if (!jsonObj["sensorType"].isNull()) {
-    int t = jsonObj["sensorType"].is<const char*>() ? CONFIG_sensorTypeFromId(jsonObj["sensorType"].as<const char*>())
-      : jsonObj["sensorType"].as<int>();
-    if (t < 0 || t >= SENSOR_TYPE_COUNT) {
-      if (error) *error = "unknown sensorType";
+  // Sensors are detected: "sensorType" and "ina219Address" from older exports are ignored
+  static const struct { const char *key; uint16_t configuration_t::*field; } shunts[] = {
+    { "ina219ShuntMilliOhm", &configuration_t::ina219ShuntMilliOhm },
+    { "ina3221ShuntMilliOhm", &configuration_t::ina3221ShuntMilliOhm },
+  };
+  for (auto &shunt : shunts) {
+    if (jsonObj[shunt.key].isNull()) continue;
+    long mohm = jsonObj[shunt.key].as<long>();
+    if (mohm < 1 || mohm > INA_MAX_SHUNT_MOHM) {
+      if (error) *error = String(shunt.key) + " must be 1 to " + String(INA_MAX_SHUNT_MOHM);
       return false;
     }
-    c.sensorType = t;
-  }
-  if (!jsonObj["ina219Address"].isNull()) {
-    int addr = jsonObj["ina219Address"].as<int>();
-    if (addr < INA219_ADDRESS_MIN || addr > INA219_ADDRESS_MAX) {
-      if (error) *error = "ina219Address must be 64 to 79 (0x40-0x4F)";
-      return false;
-    }
-    c.ina219Address = addr;
-  }
-  if (!jsonObj["ina219ShuntMilliOhm"].isNull()) {
-    long mohm = jsonObj["ina219ShuntMilliOhm"].as<long>();
-    if (mohm < 1 || mohm > INA219_MAX_SHUNT_MOHM) {
-      if (error) *error = "ina219ShuntMilliOhm must be 1 to " + String(INA219_MAX_SHUNT_MOHM);
-      return false;
-    }
-    c.ina219ShuntMilliOhm = mohm;
+    c.*shunt.field = mohm;
   }
 
   configuration = c;

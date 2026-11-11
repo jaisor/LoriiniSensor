@@ -35,11 +35,17 @@ static const help_section_t SECTIONS[] = {
     { "BOOT",       "select, confirm" },
     { "Hold BOOT",  "back (or hold screen)" },
   }},
+  { "Sensors", {
+    { "Plug in",    "own page in a few s" },
+    { "Power page", "PWR next channel" },
+    { "Climate page", "PWR next graph" },
+    { "Unplugged",  "page goes after 1 min" },
+  }},
   { "Settings", {
     { "WiFi",       "BOOT forgets network" },
-    { "Sensor",     "PWR picks the sensor" },
+    { "Sensors",    "what was found" },
     { "Brightness, Sound", "PWR +   2x PWR -" },
-    { "Web page",   "sensor address, shunt" },
+    { "Web page",   "shunt resistors" },
   }},
   { "Power", {
     { "Hold PWR 3s", "switch off (on battery)" },

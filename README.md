@@ -7,7 +7,8 @@
 </p>
 
 ESP32-S3 firmware (PlatformIO + Arduino) for the [Waveshare ESP32-S3-Touch-LCD-1.69](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.69):
-WiFi with a setup access point, a web UI for configuration, OTA updates, and a state-driven UI on the 240x280 LCD.
+WiFi with a setup access point, a web UI for configuration, OTA updates, and a state-driven UI on the 240x280 LCD
+showing the I2C sensors it finds: current / voltage monitors and environment sensors, several at once.
 
 The WiFi manager, web pages and configuration storage follow [ESP_LED_Controller](https://github.com/jaisor/ESP_LED_Controller).
 
@@ -35,11 +36,11 @@ back to the access point, and from there retries the network every minute while 
 
 | Route | |
 |---|---|
-| `/` | Status: network, time, live sensor values, battery, memory |
+| `/` | Status: network, time, live values of every sensor, battery, memory |
 | `/wifi` | Network and transmit power (saves and reboots) |
-| `/device` | Name, timezone, screen brightness, button sounds volume and sensor settings (applied live), config export/import, reboot, factory reset |
+| `/device` | Name, timezone, screen brightness, button sounds volume, detected sensors and shunt resistors (applied live), config export/import, reboot, factory reset |
 | `/update` | OTA firmware update (ElegantOTA) |
-| `/api` | Status JSON, including the sensor readings |
+| `/api` | Status JSON, including a `sensors` array with each sensor's readings |
 | `/config` | `GET` settings JSON (no WiFi password), `POST` JSON to import (saves and reboots) |
 | `/log` | Recent log lines (reading clears them) |
 
@@ -66,24 +67,48 @@ token from the repository secret `ELEGANTOTA_PRO_TOKEN`: a personal access token
 The firmware only uses the API both versions share (`begin`, `onStart`, `onEnd`, `loop`), and
 `ELEGANTOTA_USE_ASYNC_WEBSERVER=1` in `build_flags` applies to both, so nothing else needs to change.
 
-## INA219 sensor
+## Sensors
 
-Connect an INA219 current / voltage sensor breakout to the board's I2C bus (also on the extension header):
+Sensors go on the board's I2C bus (also on the extension header) and are found automatically: at boot, and every
+5 seconds after, so they can be plugged in while it runs. Each one gets its own page in the carousel, and any
+mix of them can be connected at once as long as their addresses differ (up to 8).
 
-| INA219 | Board |
+| I2C pin | Board |
 |---|---|
 | VCC | 3.3V |
 | GND | GND |
 | SDA | GPIO 11 |
 | SCL | GPIO 10 |
 
-Put the INA219's VIN+ / VIN- in series with the load's supply (high side). The Main page shows current, voltage (at
-VIN-, the load side) and power, refreshed 5 times a second, with a graph of the last 20 seconds of current.
+| Sensor | Measures | Addresses | Updates |
+|---|---|---|---|
+| INA219 | Bus voltage, current, power | 0x40-0x4F | 5x a second |
+| INA3221 | The same on 3 channels | 0x40-0x43 | 5x a second |
+| BME280 | Temperature, humidity, pressure | 0x76, 0x77 | every second |
+| BMP280 | Temperature, pressure | 0x76, 0x77 | every second |
+| BME680, BME688 | Temperature, humidity, pressure, gas resistance | 0x76, 0x77 | every 3 seconds |
+| AHT10 | Temperature, humidity | 0x38, 0x39 | every 2 seconds |
+| AHT20 (AHT21, AHT25) | Temperature, humidity | 0x38 | every 2 seconds |
 
-It's on by default at address 0x40 with a 100 milliohm shunt (the common breakout boards). Change the type
-under Settings › Sensor, and the address (0x40-0x4F, set by the A0/A1 straps) and shunt resistance on the
-Device web page. With a 0.1 ohm shunt the range is +-3.2A at 0.1mA resolution, bus voltage up to 26V. A missing
-sensor is looked for again every 5 seconds, so it can be plugged in while running.
+The environment sensors update as often as their datasheets allow without self-heating skewing the temperature:
+the AHTs ask for 2 seconds or more between measurements, and the BME68x heats its gas sensor to 320C for each
+reading. Its gas value is the raw resistance of that sensor (higher means cleaner air); it drifts for the first
+minutes after power-up and differs between chips, so compare it with itself over time. An air quality index
+would need Bosch's closed-source BSEC library, which isn't used.
+
+**Power monitors.** Put VIN+ / VIN- (INA3221: each channel's IN+ / IN-) in series with the load's supply (high
+side). The voltage is measured on the load side. Current comes from the shunt resistor value set on the Device web
+page, one for all INA219s and one for all INA3221 channels; both default to 100 milliohm, as on the common boards.
+With 0.1 ohm the INA219 reads +-3.2A at 0.1mA resolution with up to 26V bus voltage, and the INA3221 +-1.6A at
+0.4mA. Each INA219 or INA3221 needs its own address, set with its A0/A1 straps.
+
+**Detection.** Only the addresses above are probed. The INA3221 and the Bosch chips are identified by their ID
+registers before anything is written to them. At 0x38-0x39 the device is soft-reset and taken as an AHT if it then
+reports itself calibrated; the AHT10 and AHT20 are told apart by the CRC byte only the AHT20 sends. Other TI and Bosch chips at these addresses are left alone. The INA219
+has no ID register, so any other device at 0x40-0x4F gets the INA219 reset and configuration written to it to see
+whether it takes them: keep chips such as a PCA9685 or Si7021 (both at 0x40) off this bus. A device that isn't
+recognized is not tried again until it leaves the bus. A sensor that stops answering shows "Not responding" and is
+retried every 5 seconds; after a minute its page is dropped.
 
 ## Factory reset
 
@@ -103,10 +128,14 @@ the controls are the same everywhere, and the **Help** page on the device descri
 | **BOOT** hold | | back |
 | Long press on the screen | | back to the pages |
 
-- **Main** - live sensor values: current, voltage, power and a current graph
-- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensor (type, status), screen
-  brightness, button sounds volume, About
-- **Help** - buttons and gestures, Settings, power, web setup
+- **One page per sensor**, sorted by I2C address. Power monitors: current, voltage and power, with a graph of the
+  last 20 seconds of current once opened; on an INA3221 the card shows all three channels and PWR steps through
+  them. Environment sensors: temperature, then humidity, pressure and gas resistance as the sensor has them; opened,
+  one value at a time with its minimum, maximum and a graph of the last 10 minutes, PWR stepping through the values.
+  With no sensors connected a "Sensors" page shows where to connect one.
+- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensors (what was found, and
+  whether it answers), screen brightness, button sounds volume, About
+- **Help** - buttons and gestures, sensors, Settings, power, web setup
 
 In setup mode the screen shows how to join the device's WiFi; press **BOOT** or double tap to go to the pages instead.
 

@@ -11,7 +11,7 @@
 #define SCREEN      // On-board LCD
 #define BUZZER      // On-board passive buzzer, button sounds
 #define TOUCH       // CST816T touch panel (swipes in the carousel)
-#define SENSORS     // External sensors on the I2C bus (INA219)
+#define SENSORS     // External sensors on the I2C bus, detected (INA219, INA3221, BME280, BME68x, AHT10/20)
 
 //#define DISABLE_LOGGING
 #ifndef DISABLE_LOGGING
@@ -53,16 +53,10 @@
 
 #define BUZZER_VOLUME 50            // Percent on factory reset, 0 mutes
 
-// Sensor types, persisted (configuration.sensorType) - append only
-#define SENSOR_NONE   0
-#define SENSOR_INA219 1             // Current / voltage / power monitor
-#define SENSOR_TYPE_COUNT 2
-
-#define INA219_ADDRESS_MIN 0x40     // A0/A1 straps select 0x40-0x4F
-#define INA219_ADDRESS_MAX 0x4F
-#define INA219_DEFAULT_ADDRESS 0x40
+// Power monitor shunt resistors, the same for every chip of a model (and every INA3221 channel)
 #define INA219_DEFAULT_SHUNT_MOHM 100   // The common breakout boards use an R100 (0.1 ohm) shunt
-#define INA219_MAX_SHUNT_MOHM 10000
+#define INA3221_DEFAULT_SHUNT_MOHM 100
+#define INA_MAX_SHUNT_MOHM 10000
 
 // Persisted with a raw EEPROM.put - see "Conventions" in CLAUDE.md before changing it.
 // Fields are only ever appended, in blocks after _loaded with their own marker.
@@ -89,15 +83,14 @@ struct configuration_t {
   uint8_t buzzerVolume;      // Button sounds, 0 (off) - 100
   char _buzzerLoaded[4];     // "bz1"
 
-  uint8_t sensorType;            // SENSOR_*
-  uint8_t ina219Address;         // INA219_ADDRESS_MIN..MAX
-  uint16_t ina219ShuntMilliOhm;  // Shunt resistor, 1..INA219_MAX_SHUNT_MOHM
+  uint8_t _unusedSensorType;     // Sensor type and INA219 address before sensors were detected,
+  uint8_t _unusedIna219Address;  // kept for the layout
+  uint16_t ina219ShuntMilliOhm;  // Shunt resistor, 1..INA_MAX_SHUNT_MOHM
   char _sensorLoaded[4];         // "sn1"
-};
 
-extern const char * const SENSOR_TYPE_NAMES[];  // Indexed by SENSOR_*, shown in the UI
-extern const char * const SENSOR_TYPE_IDS[];    // Indexed by SENSOR_*, used in JSON
-int CONFIG_sensorTypeFromId(const char *id);    // -1 if unknown
+  uint16_t ina3221ShuntMilliOhm; // Shunt resistors of all channels, 1..INA_MAX_SHUNT_MOHM
+  char _sensor2Loaded[4];        // "sn2"
+};
 
 extern configuration_t configuration;
 #ifdef WEB_LOGGING

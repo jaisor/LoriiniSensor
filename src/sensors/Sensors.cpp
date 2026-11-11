@@ -3,132 +3,158 @@
 #ifdef SENSORS
 
 #include <ArduinoLog.h>
+#include "sensors/I2C.h"
+#include "sensors/INA219.h"
+#include "sensors/INA3221.h"
+#include "sensors/BME280.h"
+#include "sensors/BME68x.h"
+#include "sensors/AHTx0.h"
 
-CSensors::CSensors()
-: type(SENSOR_NONE), address(0), shuntMilliOhm(0), status(SensorStatus::OFF), errors(0),
-  tsRead(0), tsPublish(0), tsRetry(0), sumVoltage(0), sumCurrent(0), polls(0), pollOverRange(false),
-  readings{}, history{}, historyStart(0), historyCount(0) {
+// Every address a supported chip can have, in scan order
+static const uint8_t SCAN_ADDRESSES[] = {
+  AHT_ADDRESS, AHT_ADDRESS_ALT,
+  0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
+  0x76, 0x77
+};
+static_assert(sizeof(SCAN_ADDRESSES) == SENSOR_SCAN_ADDRESSES, "SENSOR_SCAN_ADDRESSES out of sync");
+
+CSensors::CSensors() : sensors{}, count(0), listRevision(0), failures{}, tsScan(0) {
+}
+
+CSensors::~CSensors() {
+  for (uint8_t i = 0; i < count; i++) {
+    delete sensors[i];
+  }
 }
 
 void CSensors::begin() {
-  apply();
+  scan();
+  tsScan = millis();
+  Log.infoln("Sensors: %u found", count);
 }
 
-bool CSensors::configChanged() const {
-  return type != configuration.sensorType || address != configuration.ina219Address
-    || shuntMilliOhm != configuration.ina219ShuntMilliOhm;
-}
-
-void CSensors::resetSamples() {
-  sumVoltage = sumCurrent = 0;
-  polls = 0;
-  pollOverRange = false;
-}
-
-void CSensors::apply() {
-  type = configuration.sensorType;
-  address = configuration.ina219Address;
-  shuntMilliOhm = configuration.ina219ShuntMilliOhm;
-  readings = {};
-  historyStart = historyCount = 0;
-  resetSamples();
-  errors = 0;
-
-  if (type == SENSOR_NONE) {
-    status = SensorStatus::OFF;
-    Log.infoln("Sensor: none");
-    return;
+const CSensor* CSensors::find(uint16_t id) const {
+  for (uint8_t i = 0; i < count; i++) {
+    if (sensors[i]->getId() == id) return sensors[i];
   }
-  status = probe() ? SensorStatus::OK : SensorStatus::NOT_FOUND;
-  if (status == SensorStatus::NOT_FOUND) {
-    Log.warningln("Sensor %s not found at 0x%x", getTypeName(), address);
-  }
-  tsRetry = tsRead = tsPublish = millis();
+  return nullptr;
 }
 
-bool CSensors::probe() {
-  switch (type) {
-    case SENSOR_INA219: return ina219.begin(address, shuntMilliOhm);
-    default:            return false;
+void CSensors::forEach(std::function<void(const CSensor&)> f) const {
+  std::lock_guard<std::mutex> guard(lock);
+  for (uint8_t i = 0; i < count; i++) {
+    f(*sensors[i]);
   }
 }
 
-float CSensors::getHistory(uint8_t i) const {
-  return i < historyCount ? history[(historyStart + i) % SENSOR_HISTORY] : 0;
+bool CSensors::owned(uint8_t address) const {
+  for (uint8_t i = 0; i < count; i++) {
+    if (sensors[i]->getAddress() == address) return true;
+  }
+  return false;
 }
 
-void CSensors::publish() {
-  if (polls == 0) return;
-  readings.voltage = sumVoltage / polls;
-  readings.current = sumCurrent / polls;
-  readings.power = readings.voltage * readings.current;
-  readings.overRange = pollOverRange;
-  readings.valid = true;
-  readings.sample++;
+CSensor* CSensors::tryInit(CSensor *candidate) {
+  if (candidate->init()) return candidate;
+  delete candidate;
+  return nullptr;
+}
 
-  uint8_t slot = (historyStart + historyCount) % SENSOR_HISTORY;
-  history[slot] = readings.current;
-  if (historyCount < SENSOR_HISTORY) {
-    historyCount++;
-  } else {
-    historyStart = (historyStart + 1) % SENSOR_HISTORY;
+CSensor* CSensors::identify(uint8_t address) {
+  if (address == AHT_ADDRESS || address == AHT_ADDRESS_ALT) {
+    return tryInit(new CAHTx0(address));
   }
-  resetSamples();
+  if (address >= INA219_ADDRESS_MIN && address <= INA219_ADDRESS_MAX) {
+    if (address <= INA3221_ADDRESS_MAX && CINA3221::identify(address)) {
+      return tryInit(new CINA3221(address));
+    }
+    return tryInit(new CINA219(address));  // Refuses other TI chips by their ID registers
+  }
+  bool humidity;
+  if (CBME280::identify(address, humidity)) {
+    return tryInit(new CBME280(address, humidity));
+  }
+  if (CBME68x::identify(address)) {
+    return tryInit(new CBME68x(address));
+  }
+  return nullptr;
+}
+
+void CSensors::add(CSensor *sensor) {
+  std::lock_guard<std::mutex> guard(lock);
+  uint8_t i = count;
+  while (i > 0 && sensors[i - 1]->getAddress() > sensor->getAddress()) {
+    sensors[i] = sensors[i - 1];
+    i--;
+  }
+  sensors[i] = sensor;
+  count++;
+  listRevision++;
+}
+
+void CSensors::remove(uint8_t index) {
+  CSensor *sensor;
+  {
+    std::lock_guard<std::mutex> guard(lock);
+    sensor = sensors[index];
+    for (uint8_t i = index; i + 1 < count; i++) {
+      sensors[i] = sensors[i + 1];
+    }
+    count--;
+    sensors[count] = nullptr;
+    listRevision++;
+  }
+  delete sensor;
+}
+
+bool CSensors::scan() {
+  bool added = false;
+  for (uint8_t a = 0; a < SENSOR_SCAN_ADDRESSES; a++) {
+    const uint8_t address = SCAN_ADDRESSES[a];
+    if (count >= SENSOR_MAX) break;
+    if (owned(address)) continue;
+    if (!I2C_probe(address)) {
+      failures[a] = 0;  // Gone: identify whatever shows up there next
+      continue;
+    }
+    if (failures[a] >= SENSOR_IDENTIFY_TRIES) continue;
+
+    CSensor *sensor = identify(address);
+    if (sensor) {
+      Log.noticeln("Sensor %s found at 0x%x", sensor->getName(), address);
+      failures[a] = 0;
+      add(sensor);
+      added = true;
+    } else if (++failures[a] >= SENSOR_IDENTIFY_TRIES) {
+      Log.infoln("Unknown device at 0x%x, left alone", address);
+    }
+  }
+  return added;
 }
 
 bool CSensors::loop() {
-  const SensorStatus before = status;
-
-  // Changed from the web UI or Settings
-  if (configChanged()) {
-    apply();
-    return true;
-  }
-
   const unsigned long now = millis();
-  switch (status) {
+  bool changed = false;
 
-    case SensorStatus::NOT_FOUND:
-      if (now - tsRetry >= SENSOR_RETRY_MS) {
-        tsRetry = now;
-        if (probe()) {
-          Log.infoln("Sensor %s found at 0x%x", getTypeName(), address);
-          status = SensorStatus::OK;
-          errors = 0;
-          resetSamples();
-          tsRead = tsPublish = now;
-        }
-      }
-      break;
-
-    case SensorStatus::OK:
-      if (now - tsRead >= SENSOR_READ_MS) {
-        tsRead = now;
-        CINA219::reading_t r;
-        if (ina219.read(r)) {
-          errors = 0;
-          sumVoltage += r.busVoltage;
-          sumCurrent += r.current;
-          pollOverRange |= r.overRange;
-          polls++;
-        } else if (++errors >= SENSOR_MAX_ERRORS) {
-          Log.warningln("Sensor %s at 0x%x stopped answering", getTypeName(), address);
-          status = SensorStatus::NOT_FOUND;
-          readings.valid = false;
-          tsRetry = now;
-        }
-      }
-      if (status == SensorStatus::OK && now - tsPublish >= SENSOR_PUBLISH_MS) {
-        tsPublish = now;
-        publish();
-      }
-      break;
-
-    default:
-      break;
+  for (uint8_t i = 0; i < count; i++) {
+    changed |= sensors[i]->loop(now);
   }
 
-  return status != before;
+  for (uint8_t i = 0; i < count;) {
+    if (!sensors[i]->isOnline() && now - sensors[i]->getOfflineSince() >= SENSOR_REMOVE_MS) {
+      Log.noticeln("Sensor %s at 0x%x removed", sensors[i]->getName(), sensors[i]->getAddress());
+      remove(i);
+      changed = true;
+    } else {
+      i++;
+    }
+  }
+
+  if (now - tsScan >= SENSOR_SCAN_MS) {
+    tsScan = now;
+    changed |= scan();
+  }
+  return changed;
 }
 
 void SENSOR_formatCurrent(float amps, char *value, size_t size, const char **unit) {
@@ -144,6 +170,7 @@ void SENSOR_formatCurrent(float amps, char *value, size_t size, const char **uni
 }
 
 void SENSOR_formatVoltage(float volts, char *value, size_t size, const char **unit) {
+  if (fabsf(volts) < 0.005f) volts = 0;
   snprintf(value, size, "%.2f", volts);
   *unit = "V";
 }
@@ -157,6 +184,44 @@ void SENSOR_formatPower(float watts, char *value, size_t size, const char **unit
   } else {
     snprintf(value, size, "%.2f", watts);
     *unit = "W";
+  }
+}
+
+void SENSOR_formatEnv(EnvValue v, float x, char *value, size_t size, const char **unit) {
+  const bool known = !isnan(x);
+  switch (v) {
+    case EnvValue::TEMPERATURE:
+      if (known && fabsf(x) < 0.05f) x = 0;  // No "-0.0"
+      snprintf(value, size, "%.1f", x);
+      *unit = "^C";
+      break;
+    case EnvValue::HUMIDITY:
+      snprintf(value, size, "%.1f", x);
+      *unit = "%";
+      break;
+    case EnvValue::PRESSURE:
+      snprintf(value, size, "%.1f", x);
+      *unit = "hPa";
+      break;
+    case EnvValue::GAS:
+      if (known && x >= 1e6f) {
+        snprintf(value, size, "%.2f", x / 1e6f);
+        *unit = "MOhm";
+      } else if (known && x < 1e3f) {
+        snprintf(value, size, "%.0f", x);
+        *unit = "Ohm";
+      } else {
+        snprintf(value, size, known && x >= 1e5f ? "%.0f" : "%.1f", x / 1e3f);
+        *unit = "kOhm";
+      }
+      break;
+    default:
+      snprintf(value, size, "%.2f", x);
+      *unit = "";
+      break;
+  }
+  if (!known) {
+    strlcpy(value, "--", size);
   }
 }
 

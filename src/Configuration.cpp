@@ -85,21 +85,21 @@ void EEPROM_loadConfig() {
   if (strncmp(configuration._sensorLoaded, "sn1", sizeof(configuration._sensorLoaded))) {
     Log.infoln("No sensor configuration, loading defaults");
     strcpy(configuration._sensorLoaded, "sn1");
-    configuration.sensorType = SENSOR_INA219;
-    configuration.ina219Address = INA219_DEFAULT_ADDRESS;
     configuration.ina219ShuntMilliOhm = INA219_DEFAULT_SHUNT_MOHM;
   }
-  if (configuration.sensorType >= SENSOR_TYPE_COUNT) {
-    Log.verboseln("Invalid sensorType");
-    configuration.sensorType = SENSOR_NONE;
-  }
-  if (configuration.ina219Address < INA219_ADDRESS_MIN || configuration.ina219Address > INA219_ADDRESS_MAX) {
-    Log.verboseln("Invalid ina219Address");
-    configuration.ina219Address = INA219_DEFAULT_ADDRESS;
-  }
-  if (configuration.ina219ShuntMilliOhm == 0 || configuration.ina219ShuntMilliOhm > INA219_MAX_SHUNT_MOHM) {
+  if (configuration.ina219ShuntMilliOhm == 0 || configuration.ina219ShuntMilliOhm > INA_MAX_SHUNT_MOHM) {
     Log.verboseln("Invalid ina219ShuntMilliOhm");
     configuration.ina219ShuntMilliOhm = INA219_DEFAULT_SHUNT_MOHM;
+  }
+
+  if (strncmp(configuration._sensor2Loaded, "sn2", sizeof(configuration._sensor2Loaded))) {
+    Log.infoln("No INA3221 configuration, loading defaults");
+    strcpy(configuration._sensor2Loaded, "sn2");
+    configuration.ina3221ShuntMilliOhm = INA3221_DEFAULT_SHUNT_MOHM;
+  }
+  if (configuration.ina3221ShuntMilliOhm == 0 || configuration.ina3221ShuntMilliOhm > INA_MAX_SHUNT_MOHM) {
+    Log.verboseln("Invalid ina3221ShuntMilliOhm");
+    configuration.ina3221ShuntMilliOhm = INA3221_DEFAULT_SHUNT_MOHM;
   }
 
   // Strings come straight from flash, make sure they end
@@ -168,20 +168,6 @@ unsigned long CONFIG_getUpTime() {
 bool CONFIG_isTimeSynced() {
   // The clock starts at the epoch; anything after late 2023 came from an NTP answer
   return time(nullptr) > 1700000000;
-}
-
-const char * const SENSOR_TYPE_NAMES[] = { "None", "INA219" };
-const char * const SENSOR_TYPE_IDS[] = { "none", "ina219" };
-static_assert(sizeof(SENSOR_TYPE_NAMES) / sizeof(SENSOR_TYPE_NAMES[0]) == SENSOR_TYPE_COUNT, "SENSOR_TYPE_NAMES out of sync");
-static_assert(sizeof(SENSOR_TYPE_IDS) / sizeof(SENSOR_TYPE_IDS[0]) == SENSOR_TYPE_COUNT, "SENSOR_TYPE_IDS out of sync");
-
-int CONFIG_sensorTypeFromId(const char *id) {
-  for (uint8_t i = 0; id && i < SENSOR_TYPE_COUNT; i++) {
-    if (!strcasecmp(SENSOR_TYPE_IDS[i], id)) {
-      return i;
-    }
-  }
-  return -1;
 }
 
 // { gmtOffset_sec, POSIX TZ string, human-readable label }
