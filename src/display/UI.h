@@ -1,0 +1,42 @@
+#pragma once
+
+#include "Configuration.h"
+
+#ifdef SCREEN
+
+#include <Arduino_GFX_Library.h>
+#include "display/Fonts.h"
+
+class CDevice;
+
+// Palette (RGB565). Accents borrow the lorikeet's colors.
+#define UI_COLOR_BG       RGB565(10, 14, 28)
+#define UI_COLOR_PANEL    RGB565(28, 34, 56)
+#define UI_COLOR_DIVIDER  RGB565(48, 56, 84)
+#define UI_COLOR_TEXT     RGB565(240, 242, 248)
+#define UI_COLOR_MUTED    RGB565(140, 148, 172)
+#define UI_COLOR_ACCENT   RGB565(64, 200, 96)    // green
+#define UI_COLOR_BLUE     RGB565(56, 120, 232)
+#define UI_COLOR_YELLOW   RGB565(248, 200, 40)
+#define UI_COLOR_ORANGE   RGB565(248, 112, 40)
+#define UI_COLOR_RED      RGB565(232, 64, 64)
+
+#define UI_FONT_SMALL  (&FreeSans9pt7b)
+#define UI_FONT_LABEL  (&FreeSansBold9pt7b)
+#define UI_FONT_TITLE  (&FreeSansBold12pt7b)
+#define UI_FONT_LARGE  (&FreeSansBold18pt7b)
+
+#define UI_STATUS_BAR_HEIGHT 36   // Clear of the rounded corners for content below
+
+// Text with its baseline at y, horizontally centered on the screen (or within [x, x + w))
+void UI_drawCentered(Arduino_GFX &gfx, const char *text, int16_t y, const GFXfont *font, uint16_t color,
+  int16_t x = 0, int16_t w = LCD_WIDTH);
+uint16_t UI_textWidth(Arduino_GFX &gfx, const char *text, const GFXfont *font);
+
+// WiFi signal bars (0-4 lit) in a w x h box
+void UI_drawSignalBars(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t bars, uint16_t color);
+
+// Top row: signal, clock (once NTP has answered), battery voltage
+void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device);
+
+#endif

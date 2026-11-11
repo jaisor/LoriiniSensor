@@ -1,0 +1,33 @@
+name: PlatformIO CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [waveshare_s3_lcd169]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio intelhex
+      - name: Build PlatformIO Project
+        run: pio run -e ${{ matrix.environment }}
+      - name: Upload BIN Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.ref_name }}-${{ matrix.environment }}.bin
+          path: .pio/build/${{ matrix.environment }}/firmware.bin
+          if-no-files-found: error
