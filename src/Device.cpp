@@ -9,6 +9,7 @@
 #define BATTERY_READ_INTERVAL_MS 10000
 #define POWER_OFF_HOLD_MS 3000        // Hold PWR this long to switch off (only cuts power when on battery)
 #define POWER_OFF_DELAY_MS 1500       // Time to read the message before power is cut
+#define RESTART_DELAY_MS 1500         // Time to read the message before restarting
 
 const char* deviceStateToString(DeviceState state) {
   switch (state) {
@@ -33,7 +34,7 @@ void CDevice::initHardware() {
 
 CDevice::CDevice()
 : _state(DeviceState::INITIALIZING), bootProgress(0), network{}, batteryVoltage(0), revision(0),
-  tsBattery(0), powerOffRequested(false), powerHoldHandled(false), tsPowerOff(0),
+  tsBattery(0), powerOffRequested(false), powerHoldHandled(false), tsPowerOff(0), restartRequested(false), tsRestart(0),
   // Both have external pull-ups and read low when pressed. BOOT is a strapping pin, which only matters at reset.
   buttons{ CButton(BOOT_BUTTON_PIN, INPUT_PULLUP), CButton(PWR_SYS_OUT, INPUT) } {
   #ifdef SCREEN
@@ -70,6 +71,7 @@ void CDevice::loop() {
   }
   handleButtons();
   handlePowerOff();
+  handleRestart();
   #ifdef SCREEN
   display->loop();
   #endif
@@ -129,6 +131,24 @@ void CDevice::showMessage(const char *message, unsigned long durationMs) {
   #endif
 }
 
+uint8_t CDevice::getBatteryPercent() const {
+  // Single cell LiPo at light load; on USB power without a battery it reads the charger, ~100%
+  static const struct { float v; uint8_t percent; } curve[] = {
+    {4.20f, 100}, {4.10f, 90}, {4.00f, 80}, {3.90f, 68}, {3.80f, 55},
+    {3.75f, 45}, {3.70f, 35}, {3.60f, 18}, {3.50f, 8}, {3.30f, 0}
+  };
+  const uint8_t n = sizeof(curve) / sizeof(curve[0]);
+  float v = batteryVoltage;
+  if (v >= curve[0].v) return 100;
+  for (uint8_t i = 1; i < n; i++) {
+    if (v >= curve[i].v) {
+      float f = (v - curve[i].v) / (curve[i - 1].v - curve[i].v);
+      return curve[i].percent + f * (curve[i - 1].percent - curve[i].percent) + 0.5f;
+    }
+  }
+  return 0;
+}
+
 void CDevice::readBattery() {
   tsBattery = millis();
   uint32_t mv = 0;
@@ -163,6 +183,11 @@ void CDevice::handleButtons() {
 void CDevice::onButton(ButtonId id, ButtonEvent event) {
   Log.infoln("Button %s: %s", buttonIdToString(id), buttonEventToString(event));
 
+  // Screen first, so a sound setting it changes applies to this button's sound
+  #ifdef SCREEN
+  display->onButton(id, event);
+  #endif
+
   #ifdef BUZZER
   switch (event) {
     case ButtonEvent::CLICK:        buzzer.play(BuzzerSound::CLICK); break;
@@ -170,10 +195,6 @@ void CDevice::onButton(ButtonId id, ButtonEvent event) {
     case ButtonEvent::LONG_PRESS:   buzzer.play(BuzzerSound::LONG_PRESS); break;
     default: break;
   }
-  #endif
-
-  #ifdef SCREEN
-  display->onButton(id, event);
   #endif
 }
 
@@ -187,6 +208,25 @@ void CDevice::handlePowerOff() {
     digitalWrite(PWR_SYS_EN, HIGH);
   }
 }
+
+void CDevice::handleRestart() {
+  if (restartRequested && millis() - tsRestart > RESTART_DELAY_MS) {
+    Log.noticeln("Restarting");
+    ESP.restart();
+  }
+}
+
+#ifdef WIFI
+void CDevice::forgetWifi() {
+  Log.noticeln("Forgetting WiFi network '%s'", configuration.wifiSsid);
+  strcpy(configuration.wifiSsid, "");
+  strcpy(configuration.wifiPassword, "");
+  EEPROM_saveConfig();
+  showMessage("Restarting...", RESTART_DELAY_MS + 2000);
+  restartRequested = true;
+  tsRestart = millis();
+}
+#endif
 
 void CDevice::powerOff() {
   Log.noticeln("Powering off");

@@ -28,6 +28,15 @@ class CDevice;
 
 #define UI_STATUS_BAR_HEIGHT 36   // Clear of the rounded corners for content below
 
+// Layout below the status bar
+#define UI_CONTENT_TOP     44     // First row under the status bar
+#define UI_HEADER_BASELINE 64     // Title of an opened page
+#define UI_BODY_TOP        76     // Content of an opened page starts here
+#define UI_BODY_BOTTOM     250    // ... and ends here, above the hint line
+#define UI_HINT_BASELINE   268    // Button hint at the bottom (kept short: the corners are rounded)
+
+// The fonts are 7-bit ASCII: no bullets, arrows or degree signs - draw those (UI_drawChevron)
+
 // Text with its baseline at y, horizontally centered on the screen (or within [x, x + w))
 void UI_drawCentered(Arduino_GFX &gfx, const char *text, int16_t y, const GFXfont *font, uint16_t color,
   int16_t x = 0, int16_t w = LCD_WIDTH);
@@ -36,7 +45,25 @@ uint16_t UI_textWidth(Arduino_GFX &gfx, const char *text, const GFXfont *font);
 // WiFi signal bars (0-4 lit) in a w x h box
 void UI_drawSignalBars(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t bars, uint16_t color);
 
-// Top row: signal, clock (once NTP has answered), battery voltage
+// Battery outline 24x12 at x,y with the level (0-100) filled in
+void UI_drawBattery(Arduino_GFX &gfx, int16_t x, int16_t y, uint8_t percent);
+
+// Small arrow head pointing left (dir -1) or right (dir 1), centered on cx,cy
+void UI_drawChevron(Arduino_GFX &gfx, int16_t cx, int16_t cy, int16_t size, int8_t dir, uint16_t color);
+
+// Top row: WiFi (signal bars / AP / offline), clock (once NTP has answered), battery level
 void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device);
+
+// Title of an opened page, with a back chevron
+void UI_drawHeader(Arduino_GFX &gfx, const char *title);
+
+// Button hint line at the bottom
+void UI_drawHint(Arduino_GFX &gfx, const char *hint);
+
+// Carousel position: count dots centered on cy, index highlighted
+void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index);
+
+// Horizontal level bar, e.g. brightness
+void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color);
 
 #endif

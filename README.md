@@ -1,5 +1,11 @@
 # Loriini Sensor
 
+<p align="center">
+  <img src="docs/img/rainbow-lorikeet.jpg" alt="Rainbow lorikeet, one of the Loriini" width="320"><br>
+  <sub>A rainbow lorikeet, one of the Loriini (lories and lorikeets) the project is named after.
+  Photo: ClickerHappy, via <a href="https://lafeber.com/pet-birds/">Lafeber</a>.</sub>
+</p>
+
 ESP32-S3 firmware (PlatformIO + Arduino) for the [Waveshare ESP32-S3-Touch-LCD-1.69](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.69):
 WiFi with a setup access point, a web UI for configuration, OTA updates, and a state-driven UI on the 240x280 LCD.
 
@@ -41,10 +47,27 @@ back to the access point, and from there retries the network every minute while 
 
 Power-cycle the board 3 times, each within 2 seconds of booting, or use **Factory reset** on the Device page.
 
+## On-device UI
+
+A status bar (WiFi, time, battery) sits above a carousel of pages:
+
+| | Browsing pages | Inside a page |
+|---|---|---|
+| **PWR** click | next page | next item / increase |
+| **PWR** double click | previous page | previous item / decrease |
+| **BOOT** click | open the page | select / confirm |
+| **BOOT** hold | | back |
+
+- **Main** - sensor values (placeholder until a sensor is added)
+- **Settings** - WiFi (details, forget the network to restart in setup mode), Sensor (placeholder), screen
+  brightness, button sounds volume, About
+
+In setup mode the screen shows how to join the device's WiFi; press **BOOT** to go to the pages instead.
+
 ## Buttons and power
 
 **BOOT** and **PWR** both report click, double click and long press (0.7s), each with its own sound. Set the volume,
-or 0 to mute, on the Device page. **RST** always restarts the board, and holding BOOT while it resets enters
+or 0 to mute, under Settings › Sound or on the Device web page. **RST** always restarts the board, and holding BOOT while it resets enters
 download mode.
 
 On battery, press **PWR** to switch on; the firmware latches power on at boot and ignores that first press. Hold

@@ -29,8 +29,8 @@ public:
   // Paint the whole screen, the canvas is cleared to the background color beforehand
   virtual void draw(Arduino_GFX &gfx) = 0;
 
-  // Button gesture while this screen is showing; return true if handled. The device has already played
-  // its sound. Holding PWR for 3s still powers off regardless.
+  // Button gesture while this screen is showing; return true to redraw. The device plays the button's
+  // sound right after (so a volume change made here is heard). Holding PWR for 3s still powers off.
   virtual bool onButton(ButtonId id, ButtonEvent event) { return false; }
 
   void invalidate() { dirty = true; }

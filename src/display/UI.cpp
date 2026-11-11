@@ -34,19 +34,56 @@ void UI_drawSignalBars(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_
   }
 }
 
+void UI_drawBattery(Arduino_GFX &gfx, int16_t x, int16_t y, uint8_t percent) {
+  const int16_t w = 24, h = 12;
+  uint16_t color = percent <= 10 ? UI_COLOR_RED : percent <= 20 ? UI_COLOR_ORANGE : UI_COLOR_ACCENT;
+  gfx.drawRoundRect(x, y, w, h, 3, UI_COLOR_MUTED);
+  gfx.fillRect(x + w, y + 3, 2, h - 6, UI_COLOR_MUTED);
+  int16_t fill = (w - 4) * min<uint8_t>(percent, 100) / 100;
+  if (fill > 0) {
+    gfx.fillRect(x + 2, y + 2, fill, h - 4, color);
+  }
+}
+
+void UI_drawChevron(Arduino_GFX &gfx, int16_t cx, int16_t cy, int16_t size, int8_t dir, uint16_t color) {
+  int16_t tip = cx + dir * size / 2;
+  int16_t back = cx - dir * size / 2;
+  // Two strokes, 2px thick
+  for (int8_t t = 0; t < 2; t++) {
+    gfx.drawLine(back + dir * t, cy - size, tip + dir * t, cy, color);
+    gfx.drawLine(tip + dir * t, cy, back + dir * t, cy + size, color);
+  }
+}
+
 void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device) {
   const int16_t baseline = 26;
   const int16_t side = 40;  // Rounded corners are ~43px in radius
 
-  // Signal
+  // WiFi
   const network_info_t &net = device.getNetworkInfo();
-  if (device.getState() == DeviceState::WIFI_CONNECTED) {
-    UI_drawSignalBars(gfx, side, 13, 22, 14, CDevice::signalBars(net.rssi), UI_COLOR_TEXT);
-  } else if (device.getState() == DeviceState::WIFI_AP_CREATED) {
-    gfx.setFont(UI_FONT_LABEL);
-    gfx.setTextColor(UI_COLOR_BLUE);
-    gfx.setCursor(side, baseline);
-    gfx.print("AP");
+  switch (device.getState()) {
+    case DeviceState::WIFI_CONNECTED:
+      UI_drawSignalBars(gfx, side, 13, 22, 14, CDevice::signalBars(net.rssi), UI_COLOR_TEXT);
+      break;
+    case DeviceState::WIFI_AP_CREATED:
+      gfx.setFont(UI_FONT_LABEL);
+      gfx.setTextColor(UI_COLOR_BLUE);
+      gfx.setCursor(side, baseline);
+      gfx.print("AP");
+      break;
+    case DeviceState::WIFI_CONNECTING:
+      UI_drawSignalBars(gfx, side, 13, 22, 14, 0, UI_COLOR_TEXT);
+      gfx.fillCircle(side + 26, 24, 2, UI_COLOR_YELLOW);
+      break;
+    case DeviceState::WIFI_OFFLINE:
+      UI_drawSignalBars(gfx, side, 13, 22, 14, 0, UI_COLOR_TEXT);
+      gfx.drawLine(side + 3, 13, side + 19, 27, UI_COLOR_RED);
+      gfx.drawLine(side + 4, 13, side + 20, 27, UI_COLOR_RED);
+      gfx.drawLine(side + 19, 13, side + 3, 27, UI_COLOR_RED);
+      gfx.drawLine(side + 20, 13, side + 4, 27, UI_COLOR_RED);
+      break;
+    default:
+      break;
   }
 
   // Clock
@@ -58,17 +95,50 @@ void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device) {
   }
 
   // Battery
-  float v = device.getBatteryVoltage();
-  if (v > 0.5f) {
+  if (device.getBatteryVoltage() > 0.5f) {
+    uint8_t percent = device.getBatteryPercent();
+    const int16_t iconX = LCD_WIDTH - side - 26;
+    UI_drawBattery(gfx, iconX, 14, percent);
     char buf[8];
-    snprintf(buf, sizeof(buf), "%.1fV", v);
+    snprintf(buf, sizeof(buf), "%u%%", percent);
     uint16_t w = UI_textWidth(gfx, buf, UI_FONT_SMALL);
-    gfx.setTextColor(v < 3.5f ? UI_COLOR_ORANGE : UI_COLOR_MUTED);
-    gfx.setCursor(LCD_WIDTH - side - w, baseline);
+    gfx.setTextColor(UI_COLOR_MUTED);
+    gfx.setCursor(iconX - 4 - w, baseline);
     gfx.print(buf);
   }
 
   gfx.drawFastHLine(SCREEN_SAFE_INSET, UI_STATUS_BAR_HEIGHT, LCD_WIDTH - 2 * SCREEN_SAFE_INSET, UI_COLOR_DIVIDER);
+}
+
+void UI_drawHeader(Arduino_GFX &gfx, const char *title) {
+  UI_drawChevron(gfx, 30, UI_HEADER_BASELINE - 6, 6, -1, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, title, UI_HEADER_BASELINE, UI_FONT_TITLE, UI_COLOR_TEXT);
+}
+
+void UI_drawHint(Arduino_GFX &gfx, const char *hint) {
+  UI_drawCentered(gfx, hint, UI_HINT_BASELINE, UI_FONT_SMALL, UI_COLOR_MUTED);
+}
+
+void UI_drawPageDots(Arduino_GFX &gfx, int16_t cy, uint8_t count, uint8_t index) {
+  const int16_t gap = 14;
+  int16_t x = LCD_WIDTH / 2 - (count - 1) * gap / 2;
+  for (uint8_t i = 0; i < count; i++, x += gap) {
+    if (i == index) {
+      gfx.fillCircle(x, cy, 4, UI_COLOR_TEXT);
+    } else {
+      gfx.fillCircle(x, cy, 3, UI_COLOR_DIVIDER);
+    }
+  }
+}
+
+void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color) {
+  gfx.fillRoundRect(x, y, w, h, h / 2, UI_COLOR_DIVIDER);
+  int16_t fill = w * min<uint8_t>(percent, 100) / 100;
+  if (fill >= h) {
+    gfx.fillRoundRect(x, y, fill, h, h / 2, color);
+  } else if (fill > 0) {
+    gfx.fillCircle(x + h / 2, y + h / 2, h / 2, color);
+  }
 }
 
 #endif

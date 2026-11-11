@@ -5,6 +5,7 @@
 
 #include "Device.h"
 #include "display/UI.h"
+#include "display/Display.h"
 
 #define ANIMATION_FRAME_MS 400
 
@@ -36,6 +37,13 @@ void CWifiScreen::drawWifiIcon(Arduino_GFX &gfx, int16_t cx, int16_t cy, uint8_t
     int16_t r1 = 18 + i * 16;
     gfx.fillArc(cx, cy, r1 + 8, r1, 225, 315, i < lit ? color : UI_COLOR_DIVIDER);
   }
+}
+
+bool CWifiScreen::onButton(ButtonId id, ButtonEvent event) {
+  if (id == ButtonId::BOOT && event == ButtonEvent::CLICK && device.getDisplay()) {
+    device.getDisplay()->show(ScreenId::HOME);
+  }
+  return false;
 }
 
 void CWifiScreen::draw(Arduino_GFX &gfx) {
@@ -71,6 +79,7 @@ void CWifiScreen::draw(Arduino_GFX &gfx) {
       UI_drawCentered(gfx, line, 219, UI_FONT_SMALL, UI_COLOR_TEXT);
       snprintf(line, sizeof(line), "Open http://%s", net.ip);
       UI_drawCentered(gfx, line, 240, UI_FONT_LABEL, UI_COLOR_YELLOW);
+      UI_drawHint(gfx, "BOOT menu");
     } return;
 
     case DeviceState::WIFI_OFFLINE:

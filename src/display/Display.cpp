@@ -6,6 +6,7 @@
 #include "display/UI.h"
 #include "display/screens/BootScreen.h"
 #include "display/screens/WifiScreen.h"
+#include "display/screens/HomeScreen.h"
 
 #define DISPLAY_MIN_FRAME_MS 33      // At most ~30 redraws per second
 #define BACKLIGHT_PWM_HZ 5000
@@ -45,6 +46,7 @@ void CDisplay::begin() {
 
   screens[(uint8_t)ScreenId::BOOT] = new CBootScreen(device);
   screens[(uint8_t)ScreenId::WIFI_STATUS] = new CWifiScreen(device);
+  screens[(uint8_t)ScreenId::HOME] = new CHomeScreen(device);
 
   show(screenForState(device.getState()));
   render();
@@ -56,18 +58,25 @@ ScreenId CDisplay::screenForState(DeviceState state) {
   switch (state) {
     case DeviceState::INITIALIZING:
       return ScreenId::BOOT;
-    case DeviceState::WIFI_CONNECTING:
     case DeviceState::WIFI_AP_CREATED:
+      return ScreenId::WIFI_STATUS;   // How to join and configure; BOOT continues to HOME
+    case DeviceState::WIFI_CONNECTING:
     case DeviceState::WIFI_CONNECTED:
     case DeviceState::WIFI_OFFLINE:
     default:
-      return ScreenId::WIFI_STATUS;
+      return ScreenId::HOME;          // WiFi shows in the status bar
   }
 }
 
 void CDisplay::onStateChanged(DeviceState state) {
   if (!ready) return;
   show(screenForState(state));
+  // The home screen only shows WiFi as an icon, so announce the changes
+  if (state == DeviceState::WIFI_CONNECTED) {
+    showMessage(device.getNetworkInfo().ip, 3000);
+  } else if (state == DeviceState::WIFI_OFFLINE) {
+    showMessage("WiFi lost", 3000);
+  }
   if (current) {
     current->invalidate();  // Same screen can look different per state
   }

@@ -56,6 +56,7 @@ public:
   const network_info_t& getNetworkInfo() const { return network; }
 
   float getBatteryVoltage() const { return batteryVoltage; }
+  uint8_t getBatteryPercent() const;  // Estimated from the voltage (LiPo discharge curve)
 
   // Bumped whenever anything a screen may show changes; screens redraw when it differs from theirs
   uint32_t getRevision() const { return revision.load(); }
@@ -65,6 +66,11 @@ public:
   void showMessage(const char *message, unsigned long durationMs = 3000);
 
   void powerOff();
+
+  #ifdef WIFI
+  // Clears the saved network and restarts, which brings the device up in setup mode
+  void forgetWifi();
+  #endif
 
   #ifdef BUZZER
   void playSound(BuzzerSound sound) { buzzer.play(sound); }
@@ -85,6 +91,8 @@ private:
   bool powerOffRequested;
   bool powerHoldHandled;          // Power off already triggered by the current PWR press
   unsigned long tsPowerOff;
+  bool restartRequested;
+  unsigned long tsRestart;
 
   CButton buttons[(uint8_t)ButtonId::COUNT];
   #ifdef BUZZER
@@ -99,5 +107,6 @@ private:
   void handleButtons();
   void onButton(ButtonId id, ButtonEvent event);
   void handlePowerOff();
+  void handleRestart();
   void changed() { revision++; }
 };

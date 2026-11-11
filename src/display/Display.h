@@ -10,7 +10,8 @@
 
 enum class ScreenId : uint8_t {
   BOOT = 0,
-  WIFI_STATUS,
+  WIFI_STATUS,   // Setup mode instructions
+  HOME,          // Status bar + page carousel
   COUNT
 };
 
