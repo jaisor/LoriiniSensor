@@ -85,6 +85,13 @@ void CDisplay::show(ScreenId id) {
   current->onEnter();
 }
 
+void CDisplay::onButton(ButtonId id, ButtonEvent event) {
+  if (!ready || !current) return;
+  if (current->onButton(id, event)) {
+    current->invalidate();
+  }
+}
+
 void CDisplay::showMessage(const char *text, unsigned long durationMs) {
   strlcpy(message, text, sizeof(message));
   tsMessageEnd = millis() + durationMs;

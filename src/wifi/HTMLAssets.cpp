@@ -147,7 +147,7 @@ const char htmlWifi[] = R"=====(
 )=====";
 
 // board, chip model, revision, flash MB, PSRAM MB, MAC, name, timezone options,
-// brightness min, brightness value, brightness value (label), export file name
+// brightness min, brightness value, brightness value (label), volume, volume (label), export file name
 const char htmlDevice[] = R"=====(
       <h3>Device Settings</h3>
       <fieldset>
@@ -178,13 +178,19 @@ const char htmlDevice[] = R"=====(
               oninput='document.getElementById("brightnessValue").textContent = this.value'>
             <sub><small><span id='brightnessValue'>%d</span>%%</small></sub>
           </label>
+          <label>
+            Button sounds volume
+            <input type='range' id='buzzerVolume' name='buzzerVolume' min='0' max='100' value='%d'
+              oninput='document.getElementById("volumeValue").textContent = this.value'>
+            <sub><small><span id='volumeValue'>%d</span>%% - 0 turns button sounds off</small></sub>
+          </label>
         </fieldset>
         <button type='submit' value='Submit'>Save</button>
       </form>
       <h3>Backup</h3>
       <fieldset>
         <legend><strong>💾 Configuration file</strong></legend>
-        <p><small>Device, time and screen settings as JSON. The WiFi password is never exported.</small></p>
+        <p><small>Device, time, screen and sound settings as JSON. The WiFi password is never exported.</small></p>
         <a href='config' download='%s.json' role='button' class='secondary'>Export</a>
         <br/><br/>
         <label>

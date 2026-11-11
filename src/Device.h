@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <atomic>
 #include "Configuration.h"
+#include "Button.h"
+#ifdef BUZZER
+  #include "Buzzer.h"
+#endif
 
 #ifdef SCREEN
   class CDisplay;
@@ -62,6 +66,10 @@ public:
 
   void powerOff();
 
+  #ifdef BUZZER
+  void playSound(BuzzerSound sound) { buzzer.play(sound); }
+  #endif
+
   #ifdef SCREEN
   CDisplay* getDisplay() const { return display; }
   #endif
@@ -74,15 +82,22 @@ private:
   std::atomic<uint32_t> revision;  // Bumped from the web server task too
 
   unsigned long tsBattery;
-  unsigned long tsPowerPressed;   // 0 while the PWR button is up
   bool powerOffRequested;
+  bool powerHoldHandled;          // Power off already triggered by the current PWR press
   unsigned long tsPowerOff;
+
+  CButton buttons[(uint8_t)ButtonId::COUNT];
+  #ifdef BUZZER
+  CBuzzer buzzer;
+  #endif
 
   #ifdef SCREEN
   CDisplay *display;
   #endif
 
   void readBattery();
-  void handlePowerButton();
+  void handleButtons();
+  void onButton(ButtonId id, ButtonEvent event);
+  void handlePowerOff();
   void changed() { revision++; }
 };

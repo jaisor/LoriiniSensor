@@ -33,7 +33,9 @@ void CDevice::initHardware() {
 
 CDevice::CDevice()
 : _state(DeviceState::INITIALIZING), bootProgress(0), network{}, batteryVoltage(0), revision(0),
-  tsBattery(0), tsPowerPressed(0), powerOffRequested(false), tsPowerOff(0) {
+  tsBattery(0), powerOffRequested(false), powerHoldHandled(false), tsPowerOff(0),
+  // Both have external pull-ups and read low when pressed. BOOT is a strapping pin, which only matters at reset.
+  buttons{ CButton(BOOT_BUTTON_PIN, INPUT_PULLUP), CButton(PWR_SYS_OUT, INPUT) } {
   #ifdef SCREEN
   display = new CDisplay(*this);
   #endif
@@ -52,6 +54,13 @@ void CDevice::begin() {
   #ifdef SCREEN
   display->begin();
   #endif
+  #ifdef BUZZER
+  buzzer.begin();  // After the backlight PWM, see CBuzzer
+  #endif
+  // PWR is usually still held from switching the board on; CButton ignores that press
+  for (CButton &b : buttons) {
+    b.begin();
+  }
   Log.infoln(F("Device initialized"));
 }
 
@@ -59,7 +68,8 @@ void CDevice::loop() {
   if (millis() - tsBattery > BATTERY_READ_INTERVAL_MS) {
     readBattery();
   }
-  handlePowerButton();
+  handleButtons();
+  handlePowerOff();
   #ifdef SCREEN
   display->loop();
   #endif
@@ -132,33 +142,58 @@ void CDevice::readBattery() {
   batteryVoltage = v;
 }
 
-void CDevice::handlePowerButton() {
-  if (powerOffRequested) {
-    if (millis() - tsPowerOff > POWER_OFF_DELAY_MS) {
-      Log.noticeln("Releasing power latch");
-      digitalWrite(PWR_SYS_EN, LOW);
-      // On USB power the board keeps running; let it be switched off again later
-      powerOffRequested = false;
-      delay(500);
-      digitalWrite(PWR_SYS_EN, HIGH);
+void CDevice::handleButtons() {
+  for (uint8_t i = 0; i < (uint8_t)ButtonId::COUNT; i++) {
+    ButtonEvent event = buttons[i].loop();
+    if (event != ButtonEvent::NONE) {
+      onButton((ButtonId)i, event);
     }
-    return;
   }
 
-  bool pressed = digitalRead(PWR_SYS_OUT) == LOW;
-  if (!pressed) {
-    tsPowerPressed = 0;
-  } else if (!tsPowerPressed) {
-    tsPowerPressed = millis() | 1;
-  } else if (millis() - tsPowerPressed > POWER_OFF_HOLD_MS) {
-    tsPowerPressed = 0;
+  // Holding PWR switches off, on top of the long press event it reports first
+  CButton &power = buttons[(uint8_t)ButtonId::POWER];
+  if (!power.isPressed()) {
+    powerHoldHandled = false;
+  } else if (!powerHoldHandled && power.pressedFor() >= POWER_OFF_HOLD_MS) {
+    powerHoldHandled = true;
     powerOff();
+  }
+}
+
+void CDevice::onButton(ButtonId id, ButtonEvent event) {
+  Log.infoln("Button %s: %s", buttonIdToString(id), buttonEventToString(event));
+
+  #ifdef BUZZER
+  switch (event) {
+    case ButtonEvent::CLICK:        buzzer.play(BuzzerSound::CLICK); break;
+    case ButtonEvent::DOUBLE_CLICK: buzzer.play(BuzzerSound::DOUBLE_CLICK); break;
+    case ButtonEvent::LONG_PRESS:   buzzer.play(BuzzerSound::LONG_PRESS); break;
+    default: break;
+  }
+  #endif
+
+  #ifdef SCREEN
+  display->onButton(id, event);
+  #endif
+}
+
+void CDevice::handlePowerOff() {
+  if (powerOffRequested && millis() - tsPowerOff > POWER_OFF_DELAY_MS) {
+    Log.noticeln("Releasing power latch");
+    digitalWrite(PWR_SYS_EN, LOW);
+    // On USB power the board keeps running; let it be switched off again later
+    powerOffRequested = false;
+    delay(500);
+    digitalWrite(PWR_SYS_EN, HIGH);
   }
 }
 
 void CDevice::powerOff() {
   Log.noticeln("Powering off");
   showMessage("Powering off", POWER_OFF_DELAY_MS + 1000);
+  #ifdef BUZZER
+  buzzer.play(BuzzerSound::POWER_OFF);
+  #endif
   powerOffRequested = true;
   tsPowerOff = millis();
 }

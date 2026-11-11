@@ -16,18 +16,20 @@ There are no unit tests; verification means building and testing on hardware. `b
 
 - [src/main.cpp](src/main.cpp) — `setup()`/`loop()` only: power latch, logging, factory-reset boot counter, creates `CDevice` then `CWifiManager`.
 - [src/Board.h](src/Board.h) — every GPIO of the board. Values are for the "new" board revision (model printed on it); the old one differs in buzzer, RTC INT and power latch pins (noted inline).
-- [src/Configuration.h](src/Configuration.h) / [.cpp](src/Configuration.cpp) — compile-time feature flags (`WIFI`, `SCREEN`, `WEB_LOGGING`, `DISABLE_LOGGING`), `configuration_t` + EEPROM load/save/wipe, timezone table (`TIMEZONES`, `CONFIG_getTzString()` → POSIX TZ strings).
-- [src/Device.cpp](src/Device.cpp) — `DeviceState` state machine and the data screens show (`network_info_t`, battery voltage, boot progress). Every change bumps `getRevision()`; screens redraw when it moves. Also the power latch (`PWR_SYS_EN` held high) and PWR long-press power off.
+- [src/Configuration.h](src/Configuration.h) / [.cpp](src/Configuration.cpp) — compile-time feature flags (`WIFI`, `SCREEN`, `BUZZER`, `WEB_LOGGING`, `DISABLE_LOGGING`), `configuration_t` + EEPROM load/save/wipe, timezone table (`TIMEZONES`, `CONFIG_getTzString()` → POSIX TZ strings).
+- [src/Device.cpp](src/Device.cpp) — `DeviceState` state machine and the data screens show (`network_info_t`, battery voltage, boot progress). Every change bumps `getRevision()`; screens redraw when it moves. Also the power latch (`PWR_SYS_EN` held high), the buttons and buzzer: `handleButtons()` polls both buttons, `onButton()` plays the matching sound and passes the event to the display; holding PWR for `POWER_OFF_HOLD_MS` (3s) powers off.
+- [src/Button.cpp](src/Button.cpp) — `CButton`: debounced, non-blocking click / double click / long press (`BUTTON_*_MS`). `CLICK` is reported only after the double-click window (300ms) passes; `LONG_PRESS` fires while still held. A button already down at `begin()` (PWR, from switching on) is ignored until released. `ButtonId::BOOT` = GPIO0, `ButtonId::POWER` = PWR via `PWR_SYS_OUT`; RST is a hardware reset.
+- [src/Buzzer.cpp](src/Buzzer.cpp) — `CBuzzer`: passive buzzer on LEDC PWM. Sounds are static `buzzer_note_t` arrays (`{freq Hz, ms}`, 0 Hz = rest) listed in `SOUNDS[]` in `BuzzerSound` order; an `esp_timer` steps the notes so timing isn't stretched by display flushes. Volume (`configuration.buzzerVolume`, 0 mutes) sets the duty cycle.
 - [src/display/](src/display/) — LCD UI.
   - `CDisplay` ([Display.cpp](src/display/Display.cpp)) owns the Arduino_GFX ST7789 driver, a full-screen `Arduino_Canvas` framebuffer (134KB, PSRAM), the backlight PWM and the screens. `screenForState()` maps each `DeviceState` to a `ScreenId` — **the place to add state-driven screens**. `showMessage()` draws a temporary overlay on any screen.
-  - `CScreen` ([Screen.h](src/display/Screen.h)) — base class: `draw(gfx)` paints the whole screen (canvas is cleared first, flushed after); `update()` returns true to request a redraw (default: device revision or clock minute changed). Redraws are capped at ~30 fps.
+  - `CScreen` ([Screen.h](src/display/Screen.h)) — base class: `draw(gfx)` paints the whole screen (canvas is cleared first, flushed after); `update()` returns true to request a redraw (default: device revision or clock minute changed); `onButton()` receives button gestures while the screen shows (return true to redraw). Redraws are capped at ~30 fps.
   - [UI.h](src/display/UI.h) — palette, fonts (`UI_FONT_*`), `UI_drawCentered()`, signal bars, the shared status bar (signal / clock / battery).
   - [screens/](src/display/screens/) — `CBootScreen` (INITIALIZING), `CWifiScreen` (connecting / setup AP / connected / offline variants).
   - [fonts/](src/display/fonts/) — Adafruit GFXfont headers, included only from [Fonts.cpp](src/display/Fonts.cpp) and declared `extern` in [Fonts.h](src/display/Fonts.h).
 - [src/wifi/WifiManager.cpp](src/wifi/WifiManager.cpp) — STA connect with soft-AP fallback (`LoriiniSensor_<chip id>` / `password123`, 192.168.4.1), ESPAsyncWebServer routes, NTP via POSIX TZ, ElegantOTA at `/update`. Pushes network info and state into `CDevice`. HTML templates in [HTMLAssets.cpp](src/wifi/HTMLAssets.cpp), Pico CSS in [CSSAssets.cpp](src/wifi/CSSAssets.cpp).
 
 ### Web routes
-`/` (status), `/wifi` (saves and reboots), `/device` (name, timezone, screen brightness; saves without reboot), `/style.css`, `/log` (if `WEB_LOGGING`; reading clears it), `/api` (status JSON), `GET /config` (settings JSON, no WiFi password), `POST /config` (JSON import via `updateConfigFromJson()`, validated on a copy, saves and reboots), `POST /factory_reset`, `POST /reboot`, `/update` (OTA).
+`/` (status), `/wifi` (saves and reboots), `/device` (name, timezone, screen brightness, button sounds volume; saves without reboot), `/style.css`, `/log` (if `WEB_LOGGING`; reading clears it), `/api` (status JSON), `GET /config` (settings JSON, no WiFi password), `POST /config` (JSON import via `updateConfigFromJson()`, validated on a copy, saves and reboots), `POST /factory_reset`, `POST /reboot`, `/update` (OTA).
 
 ## Conventions and gotchas
 
@@ -37,11 +39,12 @@ There are no unit tests; verification means building and testing on hardware. `b
 - The display is only drawn from `loop()` (and `setBootProgress()` during setup). Screens never call `flush()`; keep `draw()` free of blocking work.
 - The panel has ~43px-radius rounded corners: keep text centered or inside `SCREEN_SAFE_INSET`, and status-bar items ~40px from the sides.
 - The LCD is 240x280 in a 240x320 controller: `LCD_ROW_OFFSET` 20.
-- `CDevice::initHardware()` must stay first in `setup()`: on battery the board loses power when PWR is released unless `PWR_SYS_EN` is high. Keep `BUZZER_PIN` low when idle (the passive buzzer heats up otherwise).
+- `CDevice::initHardware()` must stay first in `setup()`: on battery the board loses power when PWR is released unless `PWR_SYS_EN` is high. Keep `BUZZER_PIN` low when idle (the passive buzzer heats up otherwise) - `CBuzzer` leaves it at 0% duty between sounds.
+- LEDC shares a timer between channels attached with the same frequency and resolution, and `ledcWriteTone()` retunes the whole timer. The buzzer attaches at `BUZZER_IDLE_HZ` (2 kHz) after the backlight (5 kHz) to get its own timer; don't use the backlight's frequency for notes or attach other PWM at the buzzer's.
 - HTML templates are `printf` formats: literal `%` is `%%`, and the argument list must match the comment above each template.
 - Logging uses ArduinoLog (`Log.infoln`, ...). The `while (!Serial)` wait in `setup()` is bounded on purpose (USB CDC).
 - Style: classes prefixed with `C`, 2-space indent, `#pragma once`; feature code guarded with `#ifdef SCREEN` / `#ifdef WIFI`, and should build with each flag off.
 
 ## Not implemented yet
 
-Touch (CST816T on I2C 0x15, INT 14, RST 13), IMU, RTC, buzzer, the BOOT button, MQTT, and the sensor itself.
+Touch (CST816T on I2C 0x15, INT 14, RST 13), IMU, RTC, MQTT, and the sensor itself. Screens don't act on buttons yet (the `onButton()` hook is in place).

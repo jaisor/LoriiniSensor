@@ -9,6 +9,7 @@
 
 #define WIFI        // 2.4Ghz WiFi, web server and OTA
 #define SCREEN      // On-board LCD
+#define BUZZER      // On-board passive buzzer, button sounds
 
 //#define DISABLE_LOGGING
 #ifndef DISABLE_LOGGING
@@ -48,6 +49,8 @@
   #define SCREEN_SAFE_INSET 14      // Side margin for panels; corners are rounded (~43px radius) so keep text centered
 #endif
 
+#define BUZZER_VOLUME 50            // Percent on factory reset, 0 mutes
+
 // Persisted with a raw EEPROM.put - see "Conventions" in CLAUDE.md before changing it.
 // Fields are only ever appended, in blocks after _loaded with their own marker.
 struct configuration_t {
@@ -68,6 +71,10 @@ struct configuration_t {
   uint8_t screenBrightness;  // Backlight percent, SCREEN_MIN_BRIGHTNESS..100
 
   char _loaded[7]; // "lsens1" once the configuration is initialized
+
+  // Blocks added later, each with its own marker; EEPROM_loadConfig() sets defaults when it's missing
+  uint8_t buzzerVolume;      // Button sounds, 0 (off) - 100
+  char _buzzerLoaded[4];     // "bz1"
 };
 
 extern configuration_t configuration;

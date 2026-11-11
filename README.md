@@ -31,7 +31,7 @@ back to the access point, and from there retries the network every minute while 
 |---|---|
 | `/` | Status: network, time, battery, memory |
 | `/wifi` | Network and transmit power (saves and reboots) |
-| `/device` | Name, timezone, screen brightness (applied live), config export/import, reboot, factory reset |
+| `/device` | Name, timezone, screen brightness and button sounds volume (applied live), config export/import, reboot, factory reset |
 | `/update` | OTA firmware update (ElegantOTA) |
 | `/api` | Status JSON |
 | `/config` | `GET` settings JSON (no WiFi password), `POST` JSON to import (saves and reboots) |
@@ -41,7 +41,11 @@ back to the access point, and from there retries the network every minute while 
 
 Power-cycle the board 3 times, each within 2 seconds of booting, or use **Factory reset** on the Device page.
 
-## Power
+## Buttons and power
 
-On battery, press **PWR** to switch on; the firmware latches power on at boot. Hold **PWR** for 3 seconds to switch
-off (on USB power the board keeps running).
+**BOOT** and **PWR** both report click, double click and long press (0.7s), each with its own sound. Set the volume,
+or 0 to mute, on the Device page. **RST** always restarts the board, and holding BOOT while it resets enters
+download mode.
+
+On battery, press **PWR** to switch on; the firmware latches power on at boot and ignores that first press. Hold
+**PWR** for 3 seconds to switch off (on USB power the board keeps running).

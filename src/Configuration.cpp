@@ -72,6 +72,16 @@ void EEPROM_loadConfig() {
     #endif
   }
 
+  if (strncmp(configuration._buzzerLoaded, "bz1", sizeof(configuration._buzzerLoaded))) {
+    Log.infoln("No buzzer configuration, loading defaults");
+    strcpy(configuration._buzzerLoaded, "bz1");
+    configuration.buzzerVolume = BUZZER_VOLUME;
+  }
+  if (configuration.buzzerVolume > 100) {
+    Log.verboseln("Invalid buzzerVolume");
+    configuration.buzzerVolume = BUZZER_VOLUME;
+  }
+
   // Strings come straight from flash, make sure they end
   configuration.name[sizeof(configuration.name) - 1] = '\0';
   if (!strlen(configuration.name)) {

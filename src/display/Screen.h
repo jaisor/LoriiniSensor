@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino_GFX_Library.h>
+#include "Button.h"
 
 class CDevice;
 
@@ -27,6 +28,10 @@ public:
 
   // Paint the whole screen, the canvas is cleared to the background color beforehand
   virtual void draw(Arduino_GFX &gfx) = 0;
+
+  // Button gesture while this screen is showing; return true if handled. The device has already played
+  // its sound. Holding PWR for 3s still powers off regardless.
+  virtual bool onButton(ButtonId id, ButtonEvent event) { return false; }
 
   void invalidate() { dirty = true; }
   bool isDirty() const { return dirty; }

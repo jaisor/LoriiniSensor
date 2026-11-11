@@ -366,6 +366,11 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       }
     }
 
+    if (request->hasArg("buzzerVolume")) {
+      long v = request->arg("buzzerVolume").toInt();
+      configuration.buzzerVolume = constrain(v, 0, 100);
+    }
+
     #ifdef SCREEN
     if (request->hasArg("screenBrightness")) {
       long b = request->arg("screenBrightness").toInt();
@@ -410,6 +415,7 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       WiFi.macAddress().c_str(),
       configuration.name, tzOptions.c_str(),
       brightnessMin, brightness, brightness,
+      configuration.buzzerVolume, configuration.buzzerVolume,
       configuration.name);
     printHTMLBottom(response);
     request->send(response);
@@ -495,6 +501,7 @@ void CWifiManager::handleRestAPI_Config(AsyncWebServerRequest *request) {
   #ifdef SCREEN
   configJson["screenBrightness"] = configuration.screenBrightness;
   #endif
+  configJson["buzzerVolume"] = configuration.buzzerVolume;
 
   AsyncResponseStream *response = request->beginResponseStream("application/json; charset=UTF-8", 1024);
   serializeJson(configJson, *response);
@@ -578,6 +585,15 @@ bool CWifiManager::updateConfigFromJson(JsonDocument jsonObj, String *error) {
     c.screenBrightness = b;
   }
   #endif
+
+  if (!jsonObj["buzzerVolume"].isNull()) {
+    int v = jsonObj["buzzerVolume"].as<int>();
+    if (v < 0 || v > 100) {
+      if (error) *error = "buzzerVolume must be 0 to 100";
+      return false;
+    }
+    c.buzzerVolume = v;
+  }
 
   configuration = c;
   return true;

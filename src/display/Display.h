@@ -29,6 +29,9 @@ public:
   void show(ScreenId id);
   CScreen* getScreen() const { return current; }
 
+  // Button gesture, passed to the screen that is showing
+  void onButton(ButtonId id, ButtonEvent event);
+
   // Overlay drawn on top of whatever screen is showing
   void showMessage(const char *message, unsigned long durationMs);
 
