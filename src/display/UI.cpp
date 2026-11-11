@@ -35,14 +35,30 @@ void UI_drawSignalBars(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_
 }
 
 void UI_drawBattery(Arduino_GFX &gfx, int16_t x, int16_t y, uint8_t percent) {
-  const int16_t w = 24, h = 12;
+  const int16_t w = UI_BATTERY_W - 3, h = UI_BATTERY_H;  // 3px for the terminal nub
+  percent = min<uint8_t>(percent, 100);
   uint16_t color = percent <= 10 ? UI_COLOR_RED : percent <= 20 ? UI_COLOR_ORANGE : UI_COLOR_ACCENT;
-  gfx.drawRoundRect(x, y, w, h, 3, UI_COLOR_MUTED);
-  gfx.fillRect(x + w, y + 3, 2, h - 6, UI_COLOR_MUTED);
-  int16_t fill = (w - 4) * min<uint8_t>(percent, 100) / 100;
+  gfx.drawRoundRect(x, y, w, h, 4, UI_COLOR_MUTED);
+  gfx.fillRoundRect(x + w, y + 4, 3, h - 8, 1, UI_COLOR_MUTED);
+  int16_t fill = (w - 4) * percent / 100;
   if (fill > 0) {
-    gfx.fillRect(x + 2, y + 2, fill, h - 4, color);
+    gfx.fillRoundRect(x + 2, y + 2, fill, h - 4, 2, color);
   }
+
+  // Percentage inside, in the built-in 5x7 font (the GFX fonts are too big for it). Each glyph takes a 6px
+  // cell with its last column blank; a dark shadow keeps it readable over the fill and the empty part.
+  char text[6];
+  snprintf(text, sizeof(text), "%u%%", percent);
+  const int16_t tw = strlen(text) * 6 - 1, th = 7;
+  const int16_t tx = x + (w - tw) / 2, ty = y + (h - th) / 2;
+  gfx.setFont(nullptr);
+  gfx.setTextSize(1);
+  gfx.setTextColor(UI_COLOR_BG);
+  gfx.setCursor(tx + 1, ty + 1);
+  gfx.print(text);
+  gfx.setTextColor(UI_COLOR_TEXT);
+  gfx.setCursor(tx, ty);
+  gfx.print(text);
 }
 
 void UI_drawChevron(Arduino_GFX &gfx, int16_t cx, int16_t cy, int16_t size, int8_t dir, uint16_t color) {
@@ -57,7 +73,8 @@ void UI_drawChevron(Arduino_GFX &gfx, int16_t cx, int16_t cy, int16_t size, int8
 
 void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device) {
   const int16_t baseline = 26;
-  const int16_t side = 40;  // Rounded corners are ~43px in radius
+  // The ~43px corner radius only cuts ~13px in at the top of this row (y=12), so 24px clears it
+  const int16_t side = 24;
 
   // WiFi
   const network_info_t &net = device.getNetworkInfo();
@@ -94,17 +111,9 @@ void UI_drawStatusBar(Arduino_GFX &gfx, CDevice &device) {
     UI_drawCentered(gfx, buf, baseline, UI_FONT_LABEL, UI_COLOR_TEXT);
   }
 
-  // Battery
+  // Battery, level in the icon
   if (device.getBatteryVoltage() > 0.5f) {
-    uint8_t percent = device.getBatteryPercent();
-    const int16_t iconX = LCD_WIDTH - side - 26;
-    UI_drawBattery(gfx, iconX, 14, percent);
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%u%%", percent);
-    uint16_t w = UI_textWidth(gfx, buf, UI_FONT_SMALL);
-    gfx.setTextColor(UI_COLOR_MUTED);
-    gfx.setCursor(iconX - 4 - w, baseline);
-    gfx.print(buf);
+    UI_drawBattery(gfx, LCD_WIDTH - side - UI_BATTERY_W, 12, device.getBatteryPercent());
   }
 
   gfx.drawFastHLine(SCREEN_SAFE_INSET, UI_STATUS_BAR_HEIGHT, LCD_WIDTH - 2 * SCREEN_SAFE_INSET, UI_COLOR_DIVIDER);

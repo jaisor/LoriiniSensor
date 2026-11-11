@@ -4,7 +4,7 @@
 
 // Menu of device settings, each opening its own view:
 //   WiFi        network details; forget the network to restart in setup mode
-//   Sensor      sensor selection and configuration (TODO: no sensor drivers yet)
+//   Sensor      which sensor to run (PWR cycles the types), its status, address and shunt
 //   Brightness  backlight level, live
 //   Sound       button sounds volume, live
 //   About       name, version, memory, uptime
@@ -29,7 +29,7 @@ private:
 
   View view = View::MENU;
   uint8_t selected = 0;
-  bool levelChanged = false;   // Brightness / volume edited, saved when leaving the view
+  bool levelChanged = false;   // Brightness / volume / sensor edited, saved when leaving the view
 
   bool canForgetWifi() const;
   void leaveLevelView();

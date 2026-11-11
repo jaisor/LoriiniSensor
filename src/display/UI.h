@@ -44,7 +44,10 @@ uint16_t UI_textWidth(Arduino_GFX &gfx, const char *text, const GFXfont *font);
 // WiFi signal bars (0-4 lit) in a w x h box
 void UI_drawSignalBars(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t bars, uint16_t color);
 
-// Battery outline 24x12 at x,y with the level (0-100) filled in
+// Battery icon at x,y (UI_BATTERY_W x UI_BATTERY_H, nub included): the level (0-100) filled in and
+// written inside in the small built-in font
+#define UI_BATTERY_W 37
+#define UI_BATTERY_H 16
 void UI_drawBattery(Arduino_GFX &gfx, int16_t x, int16_t y, uint8_t percent);
 
 // Small arrow head pointing left (dir -1) or right (dir 1), centered on cx,cy

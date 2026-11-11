@@ -5,6 +5,9 @@
 #include "Configuration.h"
 #include "Button.h"
 #include "Touch.h"
+#ifdef SENSORS
+  #include "sensors/Sensors.h"
+#endif
 #ifdef BUZZER
   #include "Buzzer.h"
 #endif
@@ -81,6 +84,10 @@ public:
   CDisplay* getDisplay() const { return display; }
   #endif
 
+  #ifdef SENSORS
+  const CSensors& getSensors() const { return sensors; }
+  #endif
+
 private:
   DeviceState _state;
   uint8_t bootProgress;
@@ -98,6 +105,9 @@ private:
   CButton buttons[(uint8_t)ButtonId::COUNT];
   #ifdef TOUCH
   CTouch touch;
+  #endif
+  #ifdef SENSORS
+  CSensors sensors;
   #endif
   #ifdef BUZZER
   CBuzzer buzzer;

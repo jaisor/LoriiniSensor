@@ -91,8 +91,9 @@ const char htmlBottom[] = R"=====(
 </html>
 )=====";
 
-// state, network label, SSID, IP, RSSI, signal %, local time, uptime d h m s, battery V,
-// heap free/total KB, PSRAM free/total KB
+// state, network label, SSID, IP, RSSI, signal %, local time, uptime d h m s,
+// sensor type, sensor status, voltage, current, power (the last three refresh from /api),
+// battery V, heap free/total KB, PSRAM free/total KB
 const char htmlMain[] = R"=====(
       <h3>Status</h3>
       <fieldset>
@@ -111,6 +112,30 @@ const char htmlMain[] = R"=====(
         <br/>
         <label>Uptime <kbd>%ud %02u:%02u:%02u</kbd></label>
       </fieldset>
+      <fieldset>
+        <legend><strong>📈 Sensor</strong></legend>
+        <label><kbd>%s</kbd> <kbd id='sensorStatus'>%s</kbd></label>
+        <br/>
+        <label>Voltage <kbd id='sensorVoltage'>%s</kbd></label>
+        <br/>
+        <label>Current <kbd id='sensorCurrent'>%s</kbd></label>
+        <br/>
+        <label>Power <kbd id='sensorPower'>%s</kbd></label>
+      </fieldset>
+      <script>
+        // Live sensor values while the page is open
+        setInterval(function () {
+          fetch('api').then(function (r) { return r.json(); }).then(function (j) {
+            var s = j.sensor;
+            if (!s) return;
+            document.getElementById('sensorStatus').textContent = s.status;
+            var ok = s.status == 'ok' && s.voltage_v !== undefined;
+            document.getElementById('sensorVoltage').textContent = ok ? s.voltage_v.toFixed(2) + ' V' : '-';
+            document.getElementById('sensorCurrent').textContent = ok ? (s.current_a * 1000).toFixed(1) + ' mA' + (s.over_range ? ' (over range)' : '') : '-';
+            document.getElementById('sensorPower').textContent = ok ? (s.power_w * 1000).toFixed(0) + ' mW' : '-';
+          }).catch(function () {});
+        }, 1000);
+      </script>
       <fieldset>
         <legend><strong>🔋 Power and memory</strong></legend>
         <label>Battery <kbd>%.2f V</kbd></label>
@@ -147,7 +172,8 @@ const char htmlWifi[] = R"=====(
 )=====";
 
 // board, chip model, revision, flash MB, PSRAM MB, MAC, name, timezone options,
-// brightness min, brightness value, brightness value (label), volume, volume (label), export file name
+// brightness min, brightness value, brightness value (label), volume, volume (label),
+// sensor type options, INA219 address options, INA219 shunt mOhm, export file name
 const char htmlDevice[] = R"=====(
       <h3>Device Settings</h3>
       <fieldset>
@@ -185,12 +211,34 @@ const char htmlDevice[] = R"=====(
             <sub><small><span id='volumeValue'>%d</span>%% - 0 turns button sounds off</small></sub>
           </label>
         </fieldset>
+        <fieldset>
+          <legend><strong>📈 Sensor</strong></legend>
+          <label>
+            Sensor
+            <select name='sensorType' id='sensorType'>
+              %s
+            </select>
+            <sub><small>On the I2C bus: SDA GPIO 11, SCL GPIO 10, 3.3V</small></sub>
+          </label>
+          <label>
+            INA219 I2C address
+            <select name='ina219Address' id='ina219Address'>
+              %s
+            </select>
+            <sub><small>0x40 with A0 and A1 open; the straps select 0x40-0x4F</small></sub>
+          </label>
+          <label>
+            INA219 shunt resistor (milliohm)
+            <input type='number' id='ina219ShuntMilliOhm' name='ina219ShuntMilliOhm' min='1' max='10000' value='%u'>
+            <sub><small>Common breakout boards have an R100 (100 milliohm) shunt: up to 3.2A at 0.1mA steps</small></sub>
+          </label>
+        </fieldset>
         <button type='submit' value='Submit'>Save</button>
       </form>
       <h3>Backup</h3>
       <fieldset>
         <legend><strong>💾 Configuration file</strong></legend>
-        <p><small>Device, time, screen and sound settings as JSON. The WiFi password is never exported.</small></p>
+        <p><small>Device, time, screen, sound and sensor settings as JSON. The WiFi password is never exported.</small></p>
         <a href='config' download='%s.json' role='button' class='secondary'>Export</a>
         <br/><br/>
         <label>

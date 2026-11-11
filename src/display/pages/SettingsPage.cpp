@@ -137,7 +137,21 @@ PageAction CSettingsPage::onButton(ButtonId id, ButtonEvent event) {
       }
     } break;
 
-    default:  // SENSOR, ABOUT
+    case View::SENSOR:
+      if (select || back) {
+        leaveLevelView();
+        view = View::MENU;
+        return PageAction::REDRAW;
+      }
+      if (next || prev) {
+        // Applied by CSensors on its next loop
+        configuration.sensorType = (configuration.sensorType + (next ? 1 : SENSOR_TYPE_COUNT - 1)) % SENSOR_TYPE_COUNT;
+        levelChanged = true;
+        return PageAction::REDRAW;
+      }
+      break;
+
+    default:  // ABOUT
       if (select || back) { view = View::MENU; return PageAction::REDRAW; }
       break;
   }
@@ -176,6 +190,8 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
     char value[8] = "";
     if (i == ITEM_BRIGHTNESS) {
       snprintf(value, sizeof(value), "%u%%", configuration.screenBrightness);
+    } else if (i == ITEM_SENSOR) {
+      strlcpy(value, SENSOR_TYPE_NAMES[configuration.sensorType], sizeof(value));
     } else if (i == ITEM_VOLUME) {
       if (configuration.buzzerVolume) snprintf(value, sizeof(value), "%u%%", configuration.buzzerVolume);
       else strcpy(value, "Off");
@@ -227,12 +243,35 @@ void CSettingsPage::drawForgetWifi(Arduino_GFX &gfx) {
 }
 
 void CSettingsPage::drawSensor(Arduino_GFX &gfx) {
-  // TODO: list the supported sensors to choose from, and the chosen one's settings (interval, calibration)
-  UI_drawCentered(gfx, "Sensor", UI_BODY_TOP + 60, UI_FONT_TITLE, UI_COLOR_TEXT);
-  UI_drawCentered(gfx, "No sensors yet", UI_BODY_TOP + 100, UI_FONT_LABEL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "Sensor selection and", UI_BODY_TOP + 140, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "configuration will be", UI_BODY_TOP + 160, UI_FONT_SMALL, UI_COLOR_MUTED);
-  UI_drawCentered(gfx, "here", UI_BODY_TOP + 180, UI_FONT_SMALL, UI_COLOR_MUTED);
+  char line[32];
+  const bool none = configuration.sensorType == SENSOR_NONE;
+  // Type, with arrows: PWR / 2x PWR pick another
+  UI_drawCentered(gfx, "Sensor", UI_BODY_TOP + 26, UI_FONT_SMALL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, SENSOR_TYPE_NAMES[configuration.sensorType], UI_BODY_TOP + 56, UI_FONT_TITLE,
+    none ? UI_COLOR_MUTED : UI_COLOR_TEXT);
+  UI_drawChevron(gfx, 44, UI_BODY_TOP + 48, 6, -1, UI_COLOR_MUTED);
+  UI_drawChevron(gfx, LCD_WIDTH - 44, UI_BODY_TOP + 48, 6, 1, UI_COLOR_MUTED);
+  if (none) return;
+
+  #ifdef SENSORS
+  const CSensors &sensors = device.getSensors();
+  // The choice applies on the sensors' next loop: until then the status is the previous type's
+  const bool applied = sensors.getType() == configuration.sensorType;
+  const char *status = "Starting...";
+  uint16_t color = UI_COLOR_MUTED;
+  if (applied) {
+    switch (sensors.getStatus()) {
+      case SensorStatus::OK:        status = "Connected"; color = UI_COLOR_ACCENT; break;
+      case SensorStatus::NOT_FOUND: status = "Not found"; color = UI_COLOR_ORANGE; break;
+      default: break;
+    }
+  }
+  drawField(gfx, UI_BODY_TOP + 96, "Status", status, color);
+  #endif
+  snprintf(line, sizeof(line), "0x%02X", configuration.ina219Address);
+  drawField(gfx, UI_BODY_TOP + 146, "I2C address", line);
+  snprintf(line, sizeof(line), "%u mOhm", configuration.ina219ShuntMilliOhm);
+  drawField(gfx, UI_BODY_TOP + 196, "Shunt resistor", line);
 }
 
 void CSettingsPage::drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value, const char *offText) {

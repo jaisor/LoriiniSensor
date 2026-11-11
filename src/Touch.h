@@ -8,7 +8,9 @@
 
 enum class TouchEvent : uint8_t {
   NONE = 0,
-  TAP,
+  TAP,           // Reported once the double tap window has passed without a second tap
+  DOUBLE_TAP,
+  LONG_PRESS,    // Reported while still touching, once TOUCH_LONG_PRESS_MS is reached without moving
   SWIPE_LEFT,    // Finger moved right to left
   SWIPE_RIGHT,
   SWIPE_UP,
@@ -20,8 +22,10 @@ const char* touchEventToString(TouchEvent event);
 #define TOUCH_POLL_MS        15
 #define TOUCH_SWIPE_MIN_PX   50    // Travel along the swipe axis
 #define TOUCH_SWIPE_RATIO    2     // ... and at least this many times the travel across it
-#define TOUCH_TAP_MAX_PX     15
+#define TOUCH_TAP_MAX_PX     15    // Movement still counted as a tap / long press
 #define TOUCH_TAP_MAX_MS     500
+#define TOUCH_DOUBLE_TAP_MS  350   // Max gap from the first tap's lift to the second tap's lift
+#define TOUCH_LONG_PRESS_MS  700
 
 // CST816T capacitive touch on the shared I2C bus. Polled from the loop: the chip's auto-sleep is
 // turned off so its registers can be read any time. Gestures are worked out from the start and end
@@ -49,6 +53,10 @@ private:
   bool touching;
   int16_t startX, startY, lastX, lastY;
   unsigned long tsTouchStart;
+  bool moved;               // Went past TOUCH_TAP_MAX_PX at some point during this touch
+  bool longFired;           // LONG_PRESS already reported for this touch
+  bool tapPending;          // A tap waiting to see if a second one follows
+  unsigned long tsTap;
 
   bool writeRegister(uint8_t reg, uint8_t value);
   bool readRegisters(uint8_t reg, uint8_t *buf, uint8_t len);

@@ -64,6 +64,9 @@ void CDevice::begin() {
   #ifdef TOUCH
   touch.begin();
   #endif
+  #ifdef SENSORS
+  sensors.begin();
+  #endif
   // PWR is usually still held from switching the board on; CButton ignores that press
   for (CButton &b : buttons) {
     b.begin();
@@ -77,6 +80,11 @@ void CDevice::loop() {
   }
   handleButtons();
   handleTouch();
+  #ifdef SENSORS
+  if (sensors.loop()) {
+    changed();  // Found, lost or switched: screens showing the sensor status redraw
+  }
+  #endif
   handlePowerOff();
   handleRestart();
   #ifdef SCREEN
@@ -216,7 +224,12 @@ void CDevice::handleTouch() {
   #endif
   #ifdef BUZZER
   if (handled) {
-    buzzer.play(BuzzerSound::CLICK);  // Only gestures that did something, so stray touches stay quiet
+    // Only gestures that did something, so stray touches stay quiet
+    switch (event) {
+      case TouchEvent::DOUBLE_TAP: buzzer.play(BuzzerSound::DOUBLE_CLICK); break;
+      case TouchEvent::LONG_PRESS: buzzer.play(BuzzerSound::LONG_PRESS); break;
+      default:                     buzzer.play(BuzzerSound::CLICK); break;
+    }
   }
   #endif
   (void)handled;

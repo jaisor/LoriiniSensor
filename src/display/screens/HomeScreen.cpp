@@ -84,7 +84,21 @@ bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
 
 #ifdef TOUCH
 bool CHomeScreen::onTouch(TouchEvent event, int16_t x, int16_t y) {
-  if (opened) return false;
+  if (opened) {
+    // Long press leaves the page from wherever it is (submenus included)
+    if (event == TouchEvent::LONG_PRESS) {
+      pages[index]->onClose();
+      opened = false;
+      return true;
+    }
+    return false;
+  }
+  if (event == TouchEvent::DOUBLE_TAP) {
+    sliding = false;
+    opened = true;
+    pages[index]->onOpen();
+    return true;
+  }
   // Content follows the finger: swiping left pulls in the next card from the right
   if (event == TouchEvent::SWIPE_LEFT) {
     slide(1);

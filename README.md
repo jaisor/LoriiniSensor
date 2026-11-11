@@ -35,13 +35,32 @@ back to the access point, and from there retries the network every minute while 
 
 | Route | |
 |---|---|
-| `/` | Status: network, time, battery, memory |
+| `/` | Status: network, time, live sensor values, battery, memory |
 | `/wifi` | Network and transmit power (saves and reboots) |
-| `/device` | Name, timezone, screen brightness and button sounds volume (applied live), config export/import, reboot, factory reset |
+| `/device` | Name, timezone, screen brightness, button sounds volume and sensor settings (applied live), config export/import, reboot, factory reset |
 | `/update` | OTA firmware update (ElegantOTA) |
-| `/api` | Status JSON |
+| `/api` | Status JSON, including the sensor readings |
 | `/config` | `GET` settings JSON (no WiFi password), `POST` JSON to import (saves and reboots) |
 | `/log` | Recent log lines (reading clears them) |
+
+## INA219 sensor
+
+Connect an INA219 current / voltage sensor breakout to the board's I2C bus (also on the extension header):
+
+| INA219 | Board |
+|---|---|
+| VCC | 3.3V |
+| GND | GND |
+| SDA | GPIO 11 |
+| SCL | GPIO 10 |
+
+Put the INA219's VIN+ / VIN- in series with the load's supply (high side). The Main page shows current, voltage (at
+VIN-, the load side) and power, refreshed 5 times a second, with a graph of the last 20 seconds of current.
+
+It's on by default at address 0x40 with a 100 milliohm shunt (the common breakout boards). Change the type
+under Settings › Sensor, and the address (0x40-0x4F, set by the A0/A1 straps) and shunt resistance on the
+Device web page. With a 0.1 ohm shunt the range is +-3.2A at 0.1mA resolution, bus voltage up to 26V. A missing
+sensor is looked for again every 5 seconds, so it can be plugged in while running.
 
 ## Factory reset
 
@@ -57,15 +76,16 @@ the controls are the same everywhere, and the **Help** page on the device descri
 | **PWR** click | next page | next item / increase |
 | **PWR** double click | previous page | previous item / decrease |
 | Swipe left / right | next / previous page | |
-| **BOOT** click | open the page | select / confirm |
+| **BOOT** click, or double tap | open the page | select / confirm |
 | **BOOT** hold | | back |
+| Long press on the screen | | back to the pages |
 
-- **Main** - sensor values (placeholder until a sensor is added)
-- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensor (placeholder), screen
+- **Main** - live sensor values: current, voltage, power and a current graph
+- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensor (type, status), screen
   brightness, button sounds volume, About
 - **Help** - buttons and gestures, Settings, power, web setup
 
-In setup mode the screen shows how to join the device's WiFi; press **BOOT** to go to the pages instead.
+In setup mode the screen shows how to join the device's WiFi; press **BOOT** or double tap to go to the pages instead.
 
 ## Buttons and power
 

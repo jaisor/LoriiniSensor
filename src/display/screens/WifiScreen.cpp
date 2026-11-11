@@ -46,6 +46,16 @@ bool CWifiScreen::onButton(ButtonId id, ButtonEvent event) {
   return false;
 }
 
+#ifdef TOUCH
+bool CWifiScreen::onTouch(TouchEvent event, int16_t x, int16_t y) {
+  if (event == TouchEvent::DOUBLE_TAP && device.getDisplay()) {
+    device.getDisplay()->show(ScreenId::HOME);
+    return true;
+  }
+  return false;
+}
+#endif
+
 void CWifiScreen::draw(Arduino_GFX &gfx) {
   UI_drawStatusBar(gfx, device);
 

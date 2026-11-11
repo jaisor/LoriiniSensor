@@ -3,7 +3,7 @@
 #include "display/Screen.h"
 
 // Network status: connecting / setup access point / connected with the web server address / offline.
-// CDisplay shows it in setup mode (WIFI_AP_CREATED); BOOT click continues to the home screen.
+// CDisplay shows it in setup mode (WIFI_AP_CREATED); BOOT click or a double tap continues to the home screen.
 class CWifiScreen : public CScreen {
 
 public:
@@ -14,6 +14,9 @@ public:
   bool update() override;
   void draw(Arduino_GFX &gfx) override;
   bool onButton(ButtonId id, ButtonEvent event) override;
+  #ifdef TOUCH
+  bool onTouch(TouchEvent event, int16_t x, int16_t y) override;
+  #endif
 
 private:
   uint8_t animationFrame = 0;

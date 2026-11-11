@@ -7,8 +7,9 @@
 
 // Status bar over a carousel of pages (Main, Settings, Help).
 //   Browsing: PWR click or swipe left = next page (slides in from the right), PWR double click or swipe
-//             right = previous, BOOT click = open.
-//   Opened:   buttons go to the page; it returns PageAction::EXIT (BOOT long press by convention) to browse again.
+//             right = previous, BOOT click or double tap = open.
+//   Opened:   buttons go to the page; it returns PageAction::EXIT (BOOT long press by convention) to browse
+//             again. A long press on the screen leaves the page from anywhere in it.
 class CHomeScreen : public CScreen {
 
 public:

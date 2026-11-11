@@ -15,6 +15,8 @@ const char* touchEventToString(TouchEvent event) {
   switch (event) {
     case TouchEvent::NONE:        return "NONE";
     case TouchEvent::TAP:         return "TAP";
+    case TouchEvent::DOUBLE_TAP:  return "DOUBLE_TAP";
+    case TouchEvent::LONG_PRESS:  return "LONG_PRESS";
     case TouchEvent::SWIPE_LEFT:  return "SWIPE_LEFT";
     case TouchEvent::SWIPE_RIGHT: return "SWIPE_RIGHT";
     case TouchEvent::SWIPE_UP:    return "SWIPE_UP";
@@ -24,7 +26,8 @@ const char* touchEventToString(TouchEvent event) {
 }
 
 CTouch::CTouch()
-: ready(false), tsPoll(0), readErrors(0), touching(false), startX(0), startY(0), lastX(0), lastY(0), tsTouchStart(0) {
+: ready(false), tsPoll(0), readErrors(0), touching(false), startX(0), startY(0), lastX(0), lastY(0), tsTouchStart(0),
+  moved(false), longFired(false), tapPending(false), tsTap(0) {
 }
 
 bool CTouch::writeRegister(uint8_t reg, uint8_t value) {
@@ -84,7 +87,7 @@ TouchEvent CTouch::classify() const {
   if (ay >= TOUCH_SWIPE_MIN_PX && ay >= TOUCH_SWIPE_RATIO * ax) {
     return dy < 0 ? TouchEvent::SWIPE_UP : TouchEvent::SWIPE_DOWN;
   }
-  if (ax <= TOUCH_TAP_MAX_PX && ay <= TOUCH_TAP_MAX_PX && millis() - tsTouchStart <= TOUCH_TAP_MAX_MS) {
+  if (!moved && millis() - tsTouchStart <= TOUCH_TAP_MAX_MS) {
     return TouchEvent::TAP;
   }
   return TouchEvent::NONE;  // Wandering or diagonal
@@ -93,6 +96,12 @@ TouchEvent CTouch::classify() const {
 TouchEvent CTouch::loop() {
   if (!ready || millis() - tsPoll < TOUCH_POLL_MS) return TouchEvent::NONE;
   tsPoll = millis();
+
+  // A single tap is only certain once the double tap window has passed
+  if (tapPending && !touching && millis() - tsTap > TOUCH_DOUBLE_TAP_MS) {
+    tapPending = false;
+    return TouchEvent::TAP;
+  }
 
   uint8_t buf[5];
   if (!readRegisters(REG_FINGER_NUM, buf, sizeof(buf))) {
@@ -112,17 +121,38 @@ TouchEvent CTouch::loop() {
       startX = x;
       startY = y;
       tsTouchStart = millis();
+      moved = false;
+      longFired = false;
     }
     lastX = x;
     lastY = y;
+    if (abs(x - startX) > TOUCH_TAP_MAX_PX || abs(y - startY) > TOUCH_TAP_MAX_PX) {
+      moved = true;
+    }
+    if (!moved && !longFired && millis() - tsTouchStart >= TOUCH_LONG_PRESS_MS) {
+      longFired = true;
+      tapPending = false;
+      return TouchEvent::LONG_PRESS;
+    }
     return TouchEvent::NONE;
   }
 
-  if (touching) {
-    // Lifted: the last reported point while down is the end of the gesture
-    touching = false;
-    return classify();
+  if (!touching) return TouchEvent::NONE;
+
+  // Lifted: the last reported point while down is the end of the gesture
+  touching = false;
+  if (longFired) return TouchEvent::NONE;  // Already reported
+  TouchEvent event = classify();
+  if (event != TouchEvent::TAP) {
+    tapPending = false;
+    return event;
   }
+  if (tapPending && millis() - tsTap <= TOUCH_DOUBLE_TAP_MS) {
+    tapPending = false;
+    return TouchEvent::DOUBLE_TAP;
+  }
+  tapPending = true;
+  tsTap = millis();
   return TouchEvent::NONE;
 }
 
