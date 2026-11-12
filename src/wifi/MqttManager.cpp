@@ -493,6 +493,7 @@ void CMqttManager::accumulate(mqtt_sensor_t &slot, const CSensor &s) {
       }
       slot.overRange[ch] |= r.overRange;
       slot.lastOverRange[ch] = r.overRange;
+      slot.connected[ch] = r.connected;
     }
   } else {
     const CEnvSensor &e = static_cast<const CEnvSensor&>(s);
@@ -606,6 +607,7 @@ void CMqttManager::publishState(mqtt_sensor_t &slot, bool force) {
       c["current_a"] = roundTo(value(ch * 3 + 1), 5);
       c["power_w"] = roundTo(value(ch * 3 + 2), 4);
       c["over_range"] = slot.n[ch * 3] ? slot.overRange[ch] : slot.lastOverRange[ch];
+      c["connected"] = slot.connected[ch];
     }
   } else {
     static const uint8_t DECIMALS[ENV_VALUE_COUNT] = { 2, 2, 2, 0 };

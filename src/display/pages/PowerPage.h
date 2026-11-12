@@ -8,7 +8,8 @@
 //   Card:   one channel - current big, voltage and power under it; three channels - a row each with
 //           current, voltage and power
 //   Opened: one channel at a time - current big, voltage and power, a graph of the last 20s of
-//           current. PWR / 2x PWR step through the channels, BOOT leaves.
+//           current. PWR / BOOT step through the channels, PWR double click leaves. A channel
+//           without bus voltage shows "Not connected" (see POWER_CONNECT_V).
 class CPowerPage : public CSensorPage {
 
 public:

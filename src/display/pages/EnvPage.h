@@ -8,7 +8,7 @@
 // reading (1-3s, per chip).
 //   Card:   temperature big, then whichever of humidity, pressure and gas resistance it measures
 //   Opened: one value at a time - big, with its range and a graph over the last 10 minutes.
-//           PWR / 2x PWR step through the values, BOOT leaves.
+//           PWR / BOOT step through the values, PWR double click leaves.
 class CEnvPage : public CSensorPage {
 
 public:

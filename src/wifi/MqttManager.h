@@ -44,6 +44,7 @@ struct mqtt_sensor_t {
   uint32_t n[MQTT_SENSOR_VALUES];
   float last[MQTT_SENSOR_VALUES];     // NAN until known
   bool overRange[POWER_MAX_CHANNELS], lastOverRange[POWER_MAX_CHANNELS];
+  bool connected[POWER_MAX_CHANNELS];   // Latest reading's
 };
 #endif
 

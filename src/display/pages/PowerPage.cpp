@@ -5,6 +5,8 @@
 #include "Device.h"
 #include "display/UI.h"
 
+static const char NOT_CONNECTED[] = "Not connected";   // No bus voltage: the readings would be noise
+
 void CPowerPage::drawIcon(Arduino_GFX &gfx, int16_t cx, int16_t cy) {
   // 270 degree dial open at the bottom (0 degrees = 3 o'clock, clockwise)
   gfx.fillArc(cx, cy, 32, 25, 135, 359.9, UI_COLOR_ACCENT);
@@ -27,6 +29,10 @@ void CPowerPage::drawChannelRow(Arduino_GFX &gfx, const CPowerSensor &s, uint8_t
   UI_drawCentered(gfx, number, y - 1, UI_FONT_LABEL, UI_COLOR_TEXT, x + 19, 23);
 
   const int16_t cx = x + w / 2 + 12;
+  if (!r.connected) {
+    UI_drawCentered(gfx, NOT_CONNECTED, y + 6, UI_FONT_LABEL, UI_COLOR_MUTED, cx - 70, 140);
+    return;
+  }
   SENSOR_formatCurrent(r.current, value, sizeof(value), &unit);
   UI_drawValue(gfx, cx, y, value, unit, UI_FONT_TITLE, UI_FONT_LABEL, r.overRange ? UI_COLOR_ORANGE : UI_COLOR_TEXT);
 
@@ -57,6 +63,11 @@ void CPowerPage::drawCard(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int
   char value[16];
   const char *unit;
   UI_drawCentered(gfx, getTitle(), y + 32, UI_FONT_LABEL, UI_COLOR_MUTED, x, w);
+  if (!r.connected) {
+    UI_drawCentered(gfx, NOT_CONNECTED, y + 104, UI_FONT_TITLE, UI_COLOR_MUTED, x, w);
+    UI_drawCentered(gfx, "No voltage at VIN-", y + 140, UI_FONT_SMALL, UI_COLOR_MUTED, x, w);
+    return;
+  }
   SENSOR_formatCurrent(r.current, value, sizeof(value), &unit);
   UI_drawValue(gfx, cx, y + 92, value, unit, UI_FONT_LARGE, UI_FONT_TITLE, r.overRange ? UI_COLOR_ORANGE : UI_COLOR_TEXT);
   SENSOR_formatVoltage(r.voltage, value, sizeof(value), &unit);
@@ -82,9 +93,13 @@ void CPowerPage::drawContent(Arduino_GFX &gfx) {
     strlcpy(label, r.overRange ? "Current - over range" : "Current", sizeof(label));
   }
   UI_drawCentered(gfx, label, UI_BODY_TOP + 24, UI_FONT_SMALL, r.overRange ? UI_COLOR_ORANGE : UI_COLOR_MUTED);
-  SENSOR_formatCurrent(r.current, value, sizeof(value), &unit);
-  UI_drawValue(gfx, LCD_WIDTH / 2, UI_BODY_TOP + 60, value, unit, UI_FONT_LARGE, UI_FONT_TITLE,
-    r.overRange ? UI_COLOR_ORANGE : UI_COLOR_TEXT);
+  if (r.connected) {
+    SENSOR_formatCurrent(r.current, value, sizeof(value), &unit);
+    UI_drawValue(gfx, LCD_WIDTH / 2, UI_BODY_TOP + 60, value, unit, UI_FONT_LARGE, UI_FONT_TITLE,
+      r.overRange ? UI_COLOR_ORANGE : UI_COLOR_TEXT);
+  } else {
+    UI_drawCentered(gfx, NOT_CONNECTED, UI_BODY_TOP + 56, UI_FONT_TITLE, UI_COLOR_MUTED);
+  }
 
   // Voltage and power side by side
   const int16_t left = LCD_WIDTH / 2 - 52, right = LCD_WIDTH / 2 + 52;

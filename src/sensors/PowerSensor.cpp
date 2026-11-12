@@ -1,5 +1,7 @@
 #include "sensors/PowerSensor.h"
 
+#include <ArduinoLog.h>
+
 CPowerSensor::CPowerSensor(SensorModel model, uint8_t address, uint8_t channels)
 : CSensor(model, address), channels(min<uint8_t>(channels, POWER_MAX_CHANNELS)), readings{}, history{} {
   resetAverages();
@@ -20,6 +22,9 @@ void CPowerSensor::resetAverages() {
 
 void CPowerSensor::restart() {
   resetAverages();
+  for (uint8_t c = 0; c < POWER_MAX_CHANNELS; c++) {
+    connected[c] = false;   // Until a poll sees bus voltage
+  }
   historyStart = historyCount = 0;
   tsRead = tsPublish = millis();
 }
@@ -33,6 +38,7 @@ void CPowerSensor::publish() {
     r.current = sumCurrent[c] / polls;
     r.power = r.voltage * r.current;
     r.overRange = pollOverRange[c];
+    r.connected = connected[c];
     history[c][slot] = r.current;
   }
   if (historyCount < SENSOR_HISTORY) {
@@ -52,6 +58,16 @@ bool CPowerSensor::run(unsigned long now) {
       return false;
     }
     for (uint8_t c = 0; c < channels; c++) {
+      const bool wasConnected = connected[c];
+      if (wasConnected ? r[c].voltage < POWER_DISCONNECT_V : r[c].voltage >= POWER_CONNECT_V) {
+        connected[c] = !wasConnected;
+        Log.verboseln("%s 0x%x channel %u %s (%D V)", getName(), getAddress(), c + 1,
+          connected[c] ? "connected" : "not connected", r[c].voltage);
+      }
+      if (!connected[c]) {
+        r[c].current = 0;   // Floating inputs: the shunt reading means nothing
+        r[c].overRange = false;
+      }
       sumVoltage[c] += r[c].voltage;
       sumCurrent[c] += r[c].current;
       pollOverRange[c] |= r[c].overRange;

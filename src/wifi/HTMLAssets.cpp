@@ -129,6 +129,7 @@ const char htmlMain[] = R"=====(
           if (s.channels) {
             s.channels.forEach(function (c, i) {
               var label = s.channels.length > 1 ? 'Channel ' + (i + 1) : 'Power';
+              if (c.connected === false) { html += row(label, 'not connected (no voltage)'); return; }
               html += row(label, c.voltage_v.toFixed(2) + ' V') + ' <kbd>' + current(c.current_a) + (c.over_range ? ' (over range)' : '')
                 + '</kbd> <kbd>' + power(c.power_w) + '</kbd>';
             });

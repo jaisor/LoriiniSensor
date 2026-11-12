@@ -2,8 +2,8 @@
 
 #include "display/pages/Page.h"
 
-// How to use the buttons, touch and the pages, in sections: PWR click / double click steps through
-// them, BOOT leaves. Keep it in step with what the pages actually do.
+// How to use the buttons, touch and the pages, in sections: PWR / BOOT click step through
+// them, PWR double click leaves. Keep it in step with what the pages actually do.
 class CHelpPage : public CPage {
 
 public:

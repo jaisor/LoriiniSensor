@@ -104,6 +104,15 @@ page, one for all INA219s and one for all INA3221 channels; both default to 100 
 With 0.1 ohm the INA219 reads +-3.2A at 0.1mA resolution with up to 26V bus voltage, and the INA3221 +-1.6A at
 0.4mA. Each INA219 or INA3221 needs its own address, set with its A0/A1 straps.
 
+**Nothing connected.** With its wires off, a monitor's inputs float and the current reading swings by amps of
+noise, while the voltage reads about 0 V. So a channel counts as connected only once its voltage reaches 0.5 V
+(and as disconnected again below 0.3 V): until then it shows "Not connected", its current and power are 0
+(also in `/api` and MQTT, with `"connected": false`), and the noise stays out of the averages and the graph.
+That also covers unused INA3221 channels. It assumes high-side wiring, as above: with the shunt in the ground
+return (low side) VIN- sits near 0 V and the channel would never count as connected. A 100 kOhm resistor from
+VIN- to GND keeps disconnected inputs at 0 V in hardware as well; it adds V / 100 kOhm to the measured current
+(0.12 mA at 12 V, about one step of the INA219's resolution).
+
 **Detection.** Only the addresses above are probed. The INA3221 and the Bosch chips are identified by their ID
 registers before anything is written to them. At 0x38-0x39 the device is soft-reset and taken as an AHT if it then
 reports itself calibrated; the AHT10 and AHT20 are told apart by the CRC byte only the AHT20 sends. Other TI and Bosch chips at these addresses are left alone. The INA219

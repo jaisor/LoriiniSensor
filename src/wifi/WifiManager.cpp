@@ -46,6 +46,7 @@ static void sensorToJson(const CSensor &s, JsonObject o) {
       c["current_a"] = r.current;
       c["power_w"] = r.power;
       c["over_range"] = r.overRange;
+      c["connected"] = r.connected;
     }
   } else {
     const CEnvSensor &e = static_cast<const CEnvSensor&>(s);
