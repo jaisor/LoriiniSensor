@@ -1,6 +1,6 @@
 #include "wifi/HTMLAssets.h"
 
-// name, SSID, signal %, uptime h, m, s, name
+// name, SSID, signal %, MQTT status (HTML, may be empty), uptime h, m, s, name
 const char htmlTop[] = R"=====(
 <!doctype html>
 <html lang="en" data-theme="dark">
@@ -58,6 +58,7 @@ const char htmlTop[] = R"=====(
   <body>
     <header class="container">
       <span>🛜 %s <b>%i%%</b> ▪ </span>
+      %s
       <span>⌛<b>%02d:%02d:%02d</b></span>
       <nav>
         <ul><li>
@@ -72,6 +73,7 @@ const char htmlTop[] = R"=====(
             <ul dir="rtl">
               <li><a href="wifi">WiFi 🛜</a></li>
               <li><a href="device">Device 📟</a></li>
+              <li><a href="mqtt">MQTT 📡</a></li>
               <li><a href="update">Firmware update ⬆️</a></li>
             </ul>
           </details>
@@ -244,7 +246,7 @@ const char htmlDevice[] = R"=====(
       <h3>Backup</h3>
       <fieldset>
         <legend><strong>💾 Configuration file</strong></legend>
-        <p><small>Device, time, screen, sound and sensor settings as JSON. The WiFi password is never exported.</small></p>
+        <p><small>Device, time, screen, sound, sensor and MQTT settings as JSON. The WiFi and MQTT passwords are never exported.</small></p>
         <a href='config' download='%s.json' role='button' class='secondary'>Export</a>
         <br/><br/>
         <label>
@@ -311,4 +313,63 @@ const char htmlDevice[] = R"=====(
           });
         });
       </script>
+)=====";
+
+// status icon, status text, server, port, user, password placeholder, base topic, discovery checked,
+// interval, max interval, full base topic x5, discovery prefix, discovery node
+const char htmlMqtt[] = R"=====(
+      <h3>MQTT and Home Assistant</h3>
+      <fieldset>
+        <legend><strong>📡 Connection</strong></legend>
+        <label>Status %s <kbd>%s</kbd></label>
+      </fieldset>
+      <form method='POST' action='mqtt' enctype='application/x-www-form-urlencoded' delay='1500'>
+        <fieldset>
+          <label>
+            MQTT server
+            <input type='text' id='mqttServer' name='mqttServer' value='%s' maxlength='127' placeholder='e.g. homeassistant.local - blank turns MQTT off'>
+          </label>
+          <label>
+            Port
+            <input type='number' id='mqttPort' name='mqttPort' value='%u' min='1' max='65535'>
+          </label>
+          <label>
+            Username
+            <input type='text' id='mqttUser' name='mqttUser' value='%s' maxlength='63' autocomplete='off' placeholder='blank for anonymous'>
+          </label>
+          <label>
+            Password
+            <input type='password' id='mqttPassword' name='mqttPassword' maxlength='63' autocomplete='new-password' placeholder='%s'>
+          </label>
+          <label>
+            Base topic
+            <input type='text' id='mqttTopic' name='mqttTopic' value='%s' maxlength='63'>
+            <sub><small>The device id is appended to keep devices apart</small></sub>
+          </label>
+          <label>
+            <input type='checkbox' role='switch' id='mqttDiscovery' name='mqttDiscovery' %s>
+            Home Assistant discovery
+            <br/><sub><small>Adds the device to Home Assistant with an entity per sensor value, plus signal and battery.
+              Sensors that are plugged in show up by themselves; unplugged for a minute, they are removed.</small></sub>
+          </label>
+          <label>
+            Publish interval (seconds)
+            <input type='number' id='mqttIntervalSec' name='mqttIntervalSec' value='%u' min='1' max='%d'>
+            <sub><small>Each value sent is the average of the readings since the last one</small></sub>
+          </label>
+        </fieldset>
+        <button type='submit' value='Submit'>Save and reconnect</button>
+      </form>
+      <h3>Topics</h3>
+      <fieldset>
+        <p><small>
+          <code>%s/availability</code> online / offline<br/>
+          <code>%s/json</code> device: IP, signal, battery, memory (every minute)<br/>
+          <code>%s/&lt;sensor&gt;/state</code> values, the same fields as in <a href='api'>/api</a>;
+            <code>&lt;sensor&gt;</code> is model and address, e.g. <code>bme280_76</code><br/>
+          <code>%s/&lt;sensor&gt;/availability</code> online / offline as the sensor answers<br/>
+          <code>%s/config</code> configuration JSON in, the same fields as the backup file (WiFi changes reboot)<br/>
+          Discovery: <code>%s/sensor/%s/&lt;entity&gt;/config</code>
+        </small></p>
+      </fieldset>
 )=====";

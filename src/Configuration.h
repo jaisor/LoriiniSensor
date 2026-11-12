@@ -12,6 +12,7 @@
 #define BUZZER      // On-board passive buzzer, button sounds
 #define TOUCH       // CST816T touch panel (swipes in the carousel)
 #define SENSORS     // External sensors on the I2C bus, detected (INA219, INA3221, BME280, BME68x, AHT10/20)
+#define MQTT        // Publish to an MQTT broker, with Home Assistant discovery (needs WIFI)
 
 //#define DISABLE_LOGGING
 #ifndef DISABLE_LOGGING
@@ -43,6 +44,18 @@
   #define NTP_DAYLIGHT_OFFSET_SEC 0  // Deprecated, POSIX TZ strings handle DST
 
   #define WEB_SERVER_PORT 80
+#else
+  #undef MQTT
+#endif
+
+#ifdef MQTT
+  // Off until a server is set on the MQTT web page. Topics live under <mqttTopic>/<device id>.
+  #define MQTT_PORT 1883
+  #define MQTT_TOPIC "loriini_sensor"
+  #define MQTT_DISCOVERY_PREFIX "homeassistant"   // Home Assistant's default discovery prefix
+  #define MQTT_INTERVAL_SEC 10        // Sensor values, averaged over this long, on factory reset
+  #define MQTT_MAX_INTERVAL_SEC 3600
+  #define MQTT_BUFFER_SIZE 2048       // Largest incoming message: configuration JSON, our own discovery
 #endif
 
 #ifdef SCREEN
@@ -90,6 +103,16 @@ struct configuration_t {
 
   uint16_t ina3221ShuntMilliOhm; // Shunt resistors of all channels, 1..INA_MAX_SHUNT_MOHM
   char _sensor2Loaded[4];        // "sn2"
+
+  // MQTT, in the layout whether or not MQTT is compiled in
+  char mqttServer[128];          // Blank turns MQTT off
+  uint16_t mqttPort;
+  char mqttUser[64];             // Blank connects anonymously
+  char mqttPassword[64];
+  char mqttTopic[64];            // Base topic, the device id is appended
+  uint8_t mqttDiscovery;         // Home Assistant discovery
+  uint16_t mqttIntervalSec;      // Sensor values every, 1..MQTT_MAX_INTERVAL_SEC
+  char _mqttLoaded[4];           // "mq1"
 };
 
 extern configuration_t configuration;

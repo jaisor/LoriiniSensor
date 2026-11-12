@@ -8,5 +8,6 @@ extern const char htmlBottom[];
 extern const char htmlMain[];
 extern const char htmlWifi[];
 extern const char htmlDevice[];
+extern const char htmlMqtt[];
 
 extern const char cssPico[];  // CSSAssets.cpp, served as is

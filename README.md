@@ -8,9 +8,10 @@
 
 ESP32-S3 firmware (PlatformIO + Arduino) for the [Waveshare ESP32-S3-Touch-LCD-1.69](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.69):
 WiFi with a setup access point, a web UI for configuration, OTA updates, and a state-driven UI on the 240x280 LCD
-showing the I2C sensors it finds: current / voltage monitors and environment sensors, several at once.
+showing the I2C sensors it finds: current / voltage monitors and environment sensors, several at once. The
+readings are also published over MQTT, with Home Assistant discovery.
 
-The WiFi manager, web pages and configuration storage follow [ESP_LED_Controller](https://github.com/jaisor/ESP_LED_Controller).
+The WiFi manager, web pages, MQTT topics and configuration storage follow [ESP_LED_Controller](https://github.com/jaisor/ESP_LED_Controller).
 
 ## Build and flash
 
@@ -39,6 +40,7 @@ back to the access point, and from there retries the network every minute while 
 | `/` | Status: network, time, live values of every sensor, battery, memory |
 | `/wifi` | Network and transmit power (saves and reboots) |
 | `/device` | Name, timezone, screen brightness, button sounds volume, detected sensors and shunt resistors (applied live), config export/import, reboot, factory reset |
+| `/mqtt` | MQTT broker, base topic, Home Assistant discovery and publish interval (applied live), connection status, topic list |
 | `/update` | OTA firmware update (ElegantOTA) |
 | `/api` | Status JSON, including a `sensors` array with each sensor's readings |
 | `/config` | `GET` settings JSON (no WiFi password), `POST` JSON to import (saves and reboots) |
@@ -109,6 +111,38 @@ has no ID register, so any other device at 0x40-0x4F gets the INA219 reset and c
 whether it takes them: keep chips such as a PCA9685 or Si7021 (both at 0x40) off this bus. A device that isn't
 recognized is not tried again until it leaves the bus. A sensor that stops answering shows "Not responding" and is
 retried every 5 seconds; after a minute its page is dropped.
+
+## MQTT and Home Assistant
+
+Set a broker on the **MQTT** web page (⚙️ → MQTT); MQTT stays off while the server is blank. Changes apply
+without a reboot. The device then publishes every sensor it finds, under `<base>` = `<base topic>/<device id>`
+(base topic `loriini_sensor` by default):
+
+| Topic | |
+|---|---|
+| `<base>/availability` | `online`, or `offline` (last will), retained |
+| `<base>/<sensor>/state` | The sensor's values, retained: the same JSON as its entry in `/api` |
+| `<base>/<sensor>/availability` | `online` / `offline` as the sensor answers, retained |
+| `<base>/json` | Device: IP, signal, battery, memory, every minute, retained |
+| `<base>/config` | Configuration JSON in, the same fields as the backup file; applied live, WiFi changes reboot |
+
+`<sensor>` is the model and I2C address, e.g. `bme280_76` or `ina3221_40`, so a sensor keeps its topics across
+reboots. Values are sent every publish interval (10 seconds by default, 1 to 3600), each the average of the
+readings since the previous one; a power monitor reading 5 times a second averages 50 readings into each value.
+A sensor that stops answering is marked `offline` right away, and one dropped (unplugged for a minute) has its
+topics cleared.
+
+**Home Assistant discovery** (on by default) adds the device with an entity per value: voltage, current and
+power per channel for the power monitors (`INA3221 0x40 CH1 current`, ...), temperature, humidity, pressure and
+gas resistance for the environment sensors, and WiFi signal, IP address and battery as diagnostics. Entities
+are unavailable while their sensor doesn't answer. Sensors plugged in later get their entities when they are
+found; dropped ones, and ones that are gone at the next connection (20 seconds after it, the time sensors take
+to be identified), are removed. Turning discovery off removes them all. Discovery is sent again whenever Home
+Assistant restarts (`homeassistant/status`). The topics are
+`homeassistant/sensor/LoriiniSensor_<device id>/<entity>/config`.
+
+MQTT runs in its own task, so a broker that can't be reached (connection attempts every 15 seconds, each
+blocking for seconds) never stalls the screen or buttons.
 
 ## Factory reset
 

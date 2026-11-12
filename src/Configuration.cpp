@@ -5,6 +5,20 @@
 #include "Configuration.h"
 
 configuration_t configuration;
+
+// MQTT defaults, also when MQTT isn't compiled in (the fields are in the layout either way)
+#ifdef MQTT
+  #define CONFIG_MQTT_PORT MQTT_PORT
+  #define CONFIG_MQTT_TOPIC MQTT_TOPIC
+  #define CONFIG_MQTT_INTERVAL_SEC MQTT_INTERVAL_SEC
+  #define CONFIG_MQTT_MAX_INTERVAL_SEC MQTT_MAX_INTERVAL_SEC
+#else
+  #define CONFIG_MQTT_PORT 1883
+  #define CONFIG_MQTT_TOPIC "loriini_sensor"
+  #define CONFIG_MQTT_INTERVAL_SEC 10
+  #define CONFIG_MQTT_MAX_INTERVAL_SEC 3600
+#endif
+
 static_assert(EEPROM_CONFIGURATION_START + sizeof(configuration_t) <= 4096, "configuration_t no longer fits in EEPROM");
 
 #ifdef WEB_LOGGING
@@ -100,6 +114,32 @@ void EEPROM_loadConfig() {
   if (configuration.ina3221ShuntMilliOhm == 0 || configuration.ina3221ShuntMilliOhm > INA_MAX_SHUNT_MOHM) {
     Log.verboseln("Invalid ina3221ShuntMilliOhm");
     configuration.ina3221ShuntMilliOhm = INA3221_DEFAULT_SHUNT_MOHM;
+  }
+
+  if (strncmp(configuration._mqttLoaded, "mq1", sizeof(configuration._mqttLoaded))) {
+    Log.infoln("No MQTT configuration, loading defaults");
+    strcpy(configuration._mqttLoaded, "mq1");
+    strcpy(configuration.mqttServer, "");
+    configuration.mqttPort = CONFIG_MQTT_PORT;
+    strcpy(configuration.mqttUser, "");
+    strcpy(configuration.mqttPassword, "");
+    strcpy(configuration.mqttTopic, CONFIG_MQTT_TOPIC);
+    configuration.mqttDiscovery = true;
+    configuration.mqttIntervalSec = CONFIG_MQTT_INTERVAL_SEC;
+  }
+  configuration.mqttServer[sizeof(configuration.mqttServer) - 1] = '\0';
+  configuration.mqttUser[sizeof(configuration.mqttUser) - 1] = '\0';
+  configuration.mqttPassword[sizeof(configuration.mqttPassword) - 1] = '\0';
+  configuration.mqttTopic[sizeof(configuration.mqttTopic) - 1] = '\0';
+  if (configuration.mqttPort == 0) {
+    configuration.mqttPort = CONFIG_MQTT_PORT;
+  }
+  if (!strlen(configuration.mqttTopic)) {
+    strcpy(configuration.mqttTopic, CONFIG_MQTT_TOPIC);
+  }
+  if (configuration.mqttIntervalSec == 0 || configuration.mqttIntervalSec > CONFIG_MQTT_MAX_INTERVAL_SEC) {
+    Log.verboseln("Invalid mqttIntervalSec");
+    configuration.mqttIntervalSec = CONFIG_MQTT_INTERVAL_SEC;
   }
 
   // Strings come straight from flash, make sure they end

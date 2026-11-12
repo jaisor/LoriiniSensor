@@ -8,6 +8,11 @@
 
 #include "Configuration.h"
 #include "Device.h"
+#ifdef MQTT
+  #include "wifi/MqttManager.h"
+#endif
+
+int dBmtoPercentage(int dBm);   // 0-100 from RSSI
 
 typedef enum {
   WF_CONNECTING = 0,
@@ -15,7 +20,8 @@ typedef enum {
 } wifi_status;
 
 // Joins the configured network, or runs a soft AP (<DEVICE_NAME>_<chip id>) when there is none or it
-// can't be reached, and serves the configuration web UI, JSON API and OTA updates on either.
+// can't be reached, and serves the configuration web UI, JSON API and OTA updates on either. Owns the
+// MQTT client (CMqttManager, its own task), which publishes while joined to a network.
 class CWifiManager {
 
 private:
@@ -34,6 +40,13 @@ private:
   JsonDocument deviceJson;
 
   CDevice *device;
+
+  #ifdef MQTT
+  CMqttManager mqtt;
+  void handleMqtt(AsyncWebServerRequest *request);
+  void applyConfigFromMqtt(JsonDocument &json);
+  #endif
+  String mqttStatusHtml();   // For the page header, "" when MQTT is off
 
   String currentIP();
   void connect();

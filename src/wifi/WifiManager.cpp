@@ -17,7 +17,11 @@
 const int RSSI_MAX = -50; // define maximum strength of signal in dBm
 const int RSSI_MIN = -100; // define minimum strength of signal in dBm
 
-static int dBmtoPercentage(int dBm) {
+#ifdef MQTT
+static void setMqttBaseTopic(char *dst, size_t size, String topic);
+#endif
+
+int dBmtoPercentage(int dBm) {
   if (dBm <= RSSI_MIN) return 0;
   if (dBm >= RSSI_MAX) return 100;
   return 2 * (dBm + 100);
@@ -56,7 +60,11 @@ static void sensorToJson(const CSensor &s, JsonObject o) {
 #endif
 
 CWifiManager::CWifiManager(CDevice *device)
-: rebootNeeded(false), wifiRetries(0), tMillis(0), tsRssi(0), status(WF_CONNECTING), tsAPReboot(0), device(device) {
+: rebootNeeded(false), wifiRetries(0), tMillis(0), tsRssi(0), status(WF_CONNECTING), tsAPReboot(0), device(device)
+#ifdef MQTT
+, mqtt(device)
+#endif
+{
 
   deviceJson["dev_name"] = configuration.name;
   deviceJson["version"] = VERSION;
@@ -69,6 +77,11 @@ CWifiManager::CWifiManager(CDevice *device)
   strcpy(SSID, configuration.wifiSsid);
   server = new AsyncWebServer(WEB_SERVER_PORT);
   connect();
+
+  #ifdef MQTT
+  mqtt.onConfig([this](JsonDocument &json) { applyConfigFromMqtt(json); });
+  mqtt.begin();   // Connects once the network is up
+  #endif
 }
 
 // WiFi.localIP() is 0.0.0.0 while running as a soft AP, so the reachable address has to be
@@ -175,6 +188,9 @@ void CWifiManager::startServer() {
 
   server->on("/wifi", HTTP_GET | HTTP_POST, [this](AsyncWebServerRequest *request) { handleWifi(request); });
   server->on("/device", HTTP_GET | HTTP_POST, [this](AsyncWebServerRequest *request) { handleDevice(request); });
+  #ifdef MQTT
+  server->on("/mqtt", HTTP_GET | HTTP_POST, [this](AsyncWebServerRequest *request) { handleMqtt(request); });
+  #endif
 
   server->on("/factory_reset", HTTP_POST, [this](AsyncWebServerRequest *request) { handleFactoryReset(request); });
   server->on("/reboot", HTTP_POST, [this](AsyncWebServerRequest *request) { handleReboot(request); });
@@ -224,6 +240,9 @@ void CWifiManager::loop() {
 
   if (rebootNeeded && millis() - tMillis > 300) {
     Log.noticeln("Rebooting...");
+    #ifdef MQTT
+    mqtt.stop(1000);   // "offline" now rather than when the broker's keep-alive runs out
+    #endif
     ESP.restart();
     return;
   }
@@ -385,7 +404,6 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
     deviceName.trim();
     if (deviceName.length()) {
       strlcpy(configuration.name, deviceName.c_str(), sizeof(configuration.name));
-      deviceJson["dev_name"] = configuration.name;
     }
     Log.infoln("Device name: %s", configuration.name);
 
@@ -507,6 +525,7 @@ void CWifiManager::handleReboot(AsyncWebServerRequest *request) {
 
 void CWifiManager::fillStatusJson(JsonDocument &json) {
   json.set(deviceJson);  // Static device info
+  json["dev_name"] = configuration.name;   // Can change from the web page or MQTT
   const network_info_t &net = device->getNetworkInfo();
   json["state"] = deviceStateToString(device->getState());
   json["ap_mode"] = isApMode();
@@ -522,6 +541,15 @@ void CWifiManager::fillStatusJson(JsonDocument &json) {
   device->getSensors().forEach([&sensors](const CSensor &s) {
     sensorToJson(s, sensors.add<JsonObject>());
   });
+  #endif
+  #ifdef MQTT
+  JsonObject m = json["mqtt"].to<JsonObject>();
+  m["enabled"] = mqtt.isEnabled();
+  m["connected"] = mqtt.isConnected();
+  if (mqtt.isEnabled()) {
+    m["state"] = CMqttManager::stateText(mqtt.getStateCode());
+    m["base_topic"] = CMqttManager::baseTopic();
+  }
   #endif
   json["uptime_millis"] = CONFIG_getUpTime();
   json["heap_free"] = ESP.getFreeHeap();
@@ -567,6 +595,16 @@ void CWifiManager::handleRestAPI_Config(AsyncWebServerRequest *request) {
   configJson["ina219ShuntMilliOhm"] = configuration.ina219ShuntMilliOhm;
   configJson["ina3221ShuntMilliOhm"] = configuration.ina3221ShuntMilliOhm;
 
+  #ifdef MQTT
+  // The MQTT password is never exported either
+  configJson["mqttServer"] = configuration.mqttServer;
+  configJson["mqttPort"] = configuration.mqttPort;
+  configJson["mqttUser"] = configuration.mqttUser;
+  configJson["mqttTopic"] = configuration.mqttTopic;
+  configJson["mqttDiscovery"] = (bool)configuration.mqttDiscovery;
+  configJson["mqttIntervalSec"] = configuration.mqttIntervalSec;
+  #endif
+
   AsyncResponseStream *response = request->beginResponseStream("application/json; charset=UTF-8", 1024);
   serializeJson(configJson, *response);
   request->send(response);
@@ -590,6 +628,7 @@ void CWifiManager::printHTMLTop(Print *p) {
   p->printf(htmlTop,
     configuration.name,
     isApMode() ? softAP_SSID : SSID, isApMode() ? 100 : dBmtoPercentage(WiFi.RSSI()),
+    mqttStatusHtml().c_str(),
     (int)(sec / 3600), (int)((sec / 60) % 60), (int)(sec % 60),
     configuration.name
   );
@@ -674,6 +713,171 @@ bool CWifiManager::updateConfigFromJson(JsonDocument jsonObj, String *error) {
     c.*shunt.field = mohm;
   }
 
+  #ifdef MQTT
+  if (!jsonObj["mqttServer"].isNull()) {
+    String server = jsonObj["mqttServer"] | "";
+    server.trim();
+    strlcpy(c.mqttServer, server.c_str(), sizeof(c.mqttServer));
+  }
+  if (!jsonObj["mqttPort"].isNull()) {
+    long port = jsonObj["mqttPort"].as<long>();
+    if (port < 1 || port > 65535) {
+      if (error) *error = "mqttPort must be 1 to 65535";
+      return false;
+    }
+    c.mqttPort = port;
+  }
+  if (!jsonObj["mqttUser"].isNull()) {
+    strlcpy(c.mqttUser, jsonObj["mqttUser"] | "", sizeof(c.mqttUser));
+  }
+  if (!jsonObj["mqttPassword"].isNull()) {
+    strlcpy(c.mqttPassword, jsonObj["mqttPassword"] | "", sizeof(c.mqttPassword));
+  }
+  if (!jsonObj["mqttTopic"].isNull()) {
+    setMqttBaseTopic(c.mqttTopic, sizeof(c.mqttTopic), jsonObj["mqttTopic"] | "");
+  }
+  if (!jsonObj["mqttDiscovery"].isNull()) {
+    c.mqttDiscovery = jsonObj["mqttDiscovery"].as<bool>();
+  }
+  if (!jsonObj["mqttIntervalSec"].isNull()) {
+    long interval = jsonObj["mqttIntervalSec"].as<long>();
+    if (interval < 1 || interval > MQTT_MAX_INTERVAL_SEC) {
+      if (error) *error = "mqttIntervalSec must be 1 to " + String(MQTT_MAX_INTERVAL_SEC);
+      return false;
+    }
+    c.mqttIntervalSec = interval;
+  }
+  #endif
+
   configuration = c;
   return true;
 }
+
+String CWifiManager::mqttStatusHtml() {
+  #ifdef MQTT
+  if (!mqtt.isEnabled() || isApMode()) {
+    return "";
+  }
+  if (mqtt.isConnected()) {
+    return "<span>MQTT ✅ ▪ </span>";
+  }
+  return String("<span>MQTT <a href='mqtt' title='") + CMqttManager::stateText(mqtt.getStateCode())
+    + "'>❌<sup>" + mqtt.getStateCode() + "</sup></a> ▪ </span>";
+  #else
+  return "";
+  #endif
+}
+
+#ifdef MQTT
+
+// Base topic without wildcards or surrounding slashes, MQTT_TOPIC if nothing is left
+static void setMqttBaseTopic(char *dst, size_t size, String topic) {
+  topic.trim();
+  topic.replace("#", "");
+  topic.replace("+", "");
+  topic.replace(" ", "_");
+  while (topic.startsWith("/")) topic.remove(0, 1);
+  while (topic.endsWith("/")) topic.remove(topic.length() - 1);
+  if (!topic.length()) topic = MQTT_TOPIC;
+  strlcpy(dst, topic.c_str(), size);
+}
+
+// Saved and applied without a reboot: the MQTT task reconnects with the new settings
+void CWifiManager::handleMqtt(AsyncWebServerRequest *request) {
+  Log.traceln("handleMqtt: %s", request->methodToString());
+
+  if (request->method() == HTTP_POST) {
+    long port = request->arg("mqttPort").toInt();
+    long interval = request->arg("mqttIntervalSec").toInt();
+    if (port < 1 || port > 65535 || interval < 1 || interval > MQTT_MAX_INTERVAL_SEC) {
+      AsyncResponseStream *response = request->beginResponseStream("text/plain; charset=UTF-8", 128);
+      response->setCode(400);
+      response->printf("port must be 1 to 65535 and the interval 1 to %d seconds", MQTT_MAX_INTERVAL_SEC);
+      request->send(response);
+      return;
+    }
+
+    String server = request->arg("mqttServer");
+    server.trim();
+    strlcpy(configuration.mqttServer, server.c_str(), sizeof(configuration.mqttServer));
+    configuration.mqttPort = port;
+    String user = request->arg("mqttUser");
+    user.trim();
+    strlcpy(configuration.mqttUser, user.c_str(), sizeof(configuration.mqttUser));
+    if (!user.length()) {
+      strcpy(configuration.mqttPassword, "");
+    } else if (request->arg("mqttPassword").length()) {
+      // Blank keeps the saved password, which is never sent back to the page
+      strlcpy(configuration.mqttPassword, request->arg("mqttPassword").c_str(), sizeof(configuration.mqttPassword));
+    }
+    setMqttBaseTopic(configuration.mqttTopic, sizeof(configuration.mqttTopic), request->arg("mqttTopic"));
+    configuration.mqttDiscovery = request->hasArg("mqttDiscovery");
+    configuration.mqttIntervalSec = interval;
+    Log.infoln("MQTT server '%s:%u', topic '%s', discovery %d, every %u s", configuration.mqttServer,
+      configuration.mqttPort, configuration.mqttTopic, configuration.mqttDiscovery, configuration.mqttIntervalSec);
+
+    EEPROM_saveConfig();
+    mqtt.reconfigure();
+
+    AsyncResponseStream *response = request->beginResponseStream("text/plain; charset=UTF-8", 64);
+    response->print("OK");
+    request->send(response);
+    return;
+  }
+
+  String state;
+  if (!mqtt.isEnabled()) {
+    state = "off (no server set)";
+  } else if (isApMode()) {
+    state = "waiting for the WiFi network";
+  } else {
+    state = CMqttManager::stateText(mqtt.getStateCode());
+  }
+  String base = CMqttManager::baseTopic();
+  String node = String(DEVICE_NAME) + "_" + CONFIG_getDeviceId();
+
+  AsyncResponseStream *response = request->beginResponseStream("text/html; charset=UTF-8", 8192);
+  printHTMLTop(response);
+  response->printf(htmlMqtt,
+    mqtt.isConnected() ? "✅" : (mqtt.isEnabled() ? "❌" : "⏸️"), state.c_str(),
+    configuration.mqttServer, (unsigned)configuration.mqttPort, configuration.mqttUser,
+    strlen(configuration.mqttPassword) ? "saved - leave blank to keep" : "none",
+    configuration.mqttTopic, configuration.mqttDiscovery ? "checked" : "",
+    (unsigned)configuration.mqttIntervalSec, MQTT_MAX_INTERVAL_SEC,
+    base.c_str(), base.c_str(), base.c_str(), base.c_str(), base.c_str(),
+    MQTT_DISCOVERY_PREFIX, node.c_str());
+  printHTMLBottom(response);
+  request->send(response);
+}
+
+// Configuration JSON on <base>/config, from the MQTT task: same as POST /config, but rebooting only
+// for WiFi changes; the rest applies live
+void CWifiManager::applyConfigFromMqtt(JsonDocument &json) {
+  configuration_t before = configuration;
+  String error;
+  if (!updateConfigFromJson(json, &error)) {
+    Log.errorln("Rejected configuration from MQTT: %s", error.c_str());
+    return;
+  }
+  EEPROM_saveConfig();
+  Log.noticeln("Applied configuration from MQTT");
+
+  if (strcmp(before.wifiSsid, configuration.wifiSsid) || strcmp(before.wifiPassword, configuration.wifiPassword)
+      || before.wifiPower != configuration.wifiPower) {
+    Log.noticeln("WiFi settings changed, rebooting");
+    tMillis = millis();
+    rebootNeeded = true;
+    return;
+  }
+  if (strcmp(before.mqttServer, configuration.mqttServer) || before.mqttPort != configuration.mqttPort
+      || strcmp(before.mqttUser, configuration.mqttUser) || strcmp(before.mqttPassword, configuration.mqttPassword)
+      || strcmp(before.mqttTopic, configuration.mqttTopic) || before.mqttDiscovery != configuration.mqttDiscovery) {
+    mqtt.reconfigure();
+  }
+  if (before.gmtOffset_sec != configuration.gmtOffset_sec || strcmp(before.ntpServer, configuration.ntpServer)) {
+    configTzTime(CONFIG_getTzString(configuration.gmtOffset_sec), configuration.ntpServer);
+  }
+  device->configChanged();
+}
+
+#endif
