@@ -8,6 +8,14 @@
 #include "display/UI.h"
 
 #define LEVEL_STEP 10
+#define ARROW_LIT_MS 150      // An arrow stays lit this long after a step
+
+// Edit views: level bar at STEPPER_BAR_Y, between a < and a > button
+#define STEPPER_BAR_W   100
+#define STEPPER_BAR_Y   (UI_BODY_TOP + 130)
+#define ARROW_Y         (STEPPER_BAR_Y + 6 - UI_ARROW_BUTTON_H / 2)
+#define ARROW_LEFT_X    ((LCD_WIDTH - STEPPER_BAR_W) / 2 - 10 - UI_ARROW_BUTTON_W)
+#define ARROW_RIGHT_X   ((LCD_WIDTH + STEPPER_BAR_W) / 2 + 10)
 
 const char* const CSettingsPage::ITEM_LABELS[ITEM_COUNT] = { "WiFi", "Sensors", "Brightness", "Screen saver", "Sound", "About", "Back" };
 
@@ -70,11 +78,13 @@ void CSettingsPage::drawCard(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, 
 void CSettingsPage::onOpen() {
   view = View::MENU;
   selected = 0;
-  levelChanged = false;
+  pressedDir = 0;
 }
 
 void CSettingsPage::onClose() {
-  leaveLevelView();
+  if (isEditView()) {
+    cancelEdit();   // Closed by home or a long press on the screen: the edit wasn't saved
+  }
 }
 
 bool CSettingsPage::canForgetWifi() const {
@@ -85,89 +95,136 @@ bool CSettingsPage::canForgetWifi() const {
   #endif
 }
 
-void CSettingsPage::leaveLevelView() {
-  if (levelChanged) {
-    levelChanged = false;
-    EEPROM_saveConfig();
+bool CSettingsPage::isEditView() const {
+  return view == View::BRIGHTNESS || view == View::SCREEN_SAVER || view == View::VOLUME;
+}
+
+uint16_t CSettingsPage::editValue() const {
+  switch (view) {
+    case View::BRIGHTNESS:   return configuration.screenBrightness;
+    case View::SCREEN_SAVER: return configuration.screenSaverSec;
+    default:                 return configuration.buzzerVolume;
   }
 }
 
+void CSettingsPage::setEditValue(uint16_t value) {
+  // Applied live: the display loop picks up brightness and the screen saver, the button sound
+  // plays at the new volume
+  switch (view) {
+    case View::BRIGHTNESS:   configuration.screenBrightness = value; break;
+    case View::SCREEN_SAVER: configuration.screenSaverSec = value; break;
+    default:                 configuration.buzzerVolume = value; break;
+  }
+}
+
+void CSettingsPage::startEdit(View v) {
+  view = v;
+  editOriginal = editValue();
+  pressedDir = 0;
+}
+
+void CSettingsPage::stepEdit(int8_t dir) {
+  switch (view) {
+    case View::BRIGHTNESS:   setEditValue(stepLevel(editValue(), dir, SCREEN_MIN_BRIGHTNESS)); break;
+    case View::SCREEN_SAVER: setEditValue(stepScreenSaver(editValue(), dir)); break;
+    default:                 setEditValue(stepLevel(editValue(), dir, 0)); break;
+  }
+  pressedDir = dir;   // Lights the arrow for a moment, for buttons and taps alike
+  tsPressed = millis();
+}
+
+void CSettingsPage::saveEdit() {
+  if (editValue() != editOriginal) {
+    EEPROM_saveConfig();
+  }
+  device.showMessage("Saved", 1000);
+  view = View::MENU;
+}
+
+void CSettingsPage::cancelEdit() {
+  setEditValue(editOriginal);
+  view = View::MENU;
+}
+
+bool CSettingsPage::update() {
+  if (pressedDir && millis() - tsPressed >= ARROW_LIT_MS) {
+    pressedDir = 0;
+    return true;
+  }
+  return false;
+}
+
 PageAction CSettingsPage::onButton(ButtonId id, ButtonEvent event) {
-  const bool next = id == ButtonId::POWER && event == ButtonEvent::CLICK;
-  const bool prev = id == ButtonId::POWER && event == ButtonEvent::DOUBLE_CLICK;
-  const bool select = id == ButtonId::BOOT && event == ButtonEvent::CLICK;
-  const bool back = id == ButtonId::BOOT && event == ButtonEvent::LONG_PRESS;
+  const int8_t dir = PAGE_step(id, event);
+  const bool ok = PAGE_isOk(id, event);
+  // One level up, without saving: PWR double click, or cancel (BOOT double click)
+  const bool up = PAGE_isUp(id, event) || PAGE_isCancel(id, event);
 
   switch (view) {
 
     case View::MENU:
-      if (next) { selected = (selected + 1) % ITEM_COUNT; return PageAction::REDRAW; }
-      if (prev) { selected = (selected + ITEM_COUNT - 1) % ITEM_COUNT; return PageAction::REDRAW; }
-      if (back) return PageAction::EXIT;
-      if (select) {
+      if (dir) { selected = (selected + ITEM_COUNT + dir) % ITEM_COUNT; return PageAction::REDRAW; }
+      if (up) return PageAction::EXIT;
+      if (ok) {
         switch (selected) {
-          case ITEM_WIFI:       view = View::NETWORK; break;
-          case ITEM_SENSOR:     view = View::SENSOR; break;
-          case ITEM_BRIGHTNESS: view = View::BRIGHTNESS; break;
-          case ITEM_SCREEN_SAVER: view = View::SCREEN_SAVER; break;
-          case ITEM_VOLUME:     view = View::VOLUME; break;
-          case ITEM_ABOUT:      view = View::ABOUT; break;
-          default:              return PageAction::EXIT;  // Back
+          case ITEM_WIFI:         view = View::NETWORK; break;
+          case ITEM_SENSOR:       view = View::SENSOR; break;
+          case ITEM_BRIGHTNESS:   startEdit(View::BRIGHTNESS); break;
+          case ITEM_SCREEN_SAVER: startEdit(View::SCREEN_SAVER); break;
+          case ITEM_VOLUME:       startEdit(View::VOLUME); break;
+          case ITEM_ABOUT:        view = View::ABOUT; break;
+          default:                return PageAction::EXIT;  // Back
         }
         return PageAction::REDRAW;
       }
       break;
 
     case View::NETWORK:
-      if (back) { view = View::MENU; return PageAction::REDRAW; }
-      if (select && canForgetWifi()) { view = View::FORGET_WIFI; return PageAction::REDRAW; }
+      if (up) { view = View::MENU; return PageAction::REDRAW; }
+      if (ok && canForgetWifi()) { view = View::FORGET_WIFI; return PageAction::REDRAW; }
       break;
 
     case View::FORGET_WIFI:
-      if (select) {
+      if (ok) {
         #ifdef WIFI
         device.forgetWifi();  // Saves and restarts in setup mode
         #endif
         view = View::NETWORK;
         return PageAction::REDRAW;
       }
-      if (back || next || prev) { view = View::NETWORK; return PageAction::REDRAW; }
+      if (up || dir) { view = View::NETWORK; return PageAction::REDRAW; }
       break;
 
     case View::BRIGHTNESS:
     case View::SCREEN_SAVER:
-    case View::VOLUME: {
-      if (select || back) {
-        leaveLevelView();
-        view = View::MENU;
-        return PageAction::REDRAW;
-      }
-      if (next || prev) {
-        int8_t dir = next ? 1 : -1;
-        if (view == View::BRIGHTNESS) {
-          #ifdef SCREEN
-          configuration.screenBrightness = stepLevel(configuration.screenBrightness, dir, SCREEN_MIN_BRIGHTNESS);  // Applied by the display loop
-          #endif
-        } else if (view == View::SCREEN_SAVER) {
-          configuration.screenSaverSec = stepScreenSaver(configuration.screenSaverSec, dir);  // Counts from now
-        } else {
-          configuration.buzzerVolume = stepLevel(configuration.buzzerVolume, dir, 0);  // The button sound plays at the new level
-        }
-        levelChanged = true;
-        return PageAction::REDRAW;
-      }
-    } break;
-
-    case View::SENSOR:
-      if (select || back) { view = View::MENU; return PageAction::REDRAW; }
+    case View::VOLUME:
+      if (dir) { stepEdit(dir); return PageAction::REDRAW; }
+      if (ok) { saveEdit(); return PageAction::REDRAW; }
+      if (up) { cancelEdit(); return PageAction::REDRAW; }
       break;
 
-    default:  // ABOUT
-      if (select || back) { view = View::MENU; return PageAction::REDRAW; }
+    default:  // SENSOR, ABOUT: nothing to do but leave
+      if (up || ok) { view = View::MENU; return PageAction::REDRAW; }
       break;
   }
   return PageAction::NONE;
 }
+
+#ifdef TOUCH
+// The < and > buttons of the edit views
+PageAction CSettingsPage::onTouch(TouchEvent event, int16_t x, int16_t y) {
+  if (event != TouchEvent::TAP || !isEditView()) return PageAction::NONE;
+  if (UI_hit(x, y, ARROW_LEFT_X, ARROW_Y, UI_ARROW_BUTTON_W, UI_ARROW_BUTTON_H)) {
+    stepEdit(-1);
+    return PageAction::REDRAW;
+  }
+  if (UI_hit(x, y, ARROW_RIGHT_X, ARROW_Y, UI_ARROW_BUTTON_W, UI_ARROW_BUTTON_H)) {
+    stepEdit(1);
+    return PageAction::REDRAW;
+  }
+  return PageAction::NONE;
+}
+#endif
 
 void CSettingsPage::drawContent(Arduino_GFX &gfx) {
   switch (view) {
@@ -307,11 +364,14 @@ void CSettingsPage::drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value
   }
   UI_drawCentered(gfx, label, UI_BODY_TOP + 50, UI_FONT_LABEL, UI_COLOR_MUTED);
   UI_drawCentered(gfx, text, UI_BODY_TOP + 104, UI_FONT_LARGE, value ? UI_COLOR_TEXT : UI_COLOR_MUTED);
-  const int16_t w = 160;
-  const int16_t barY = UI_BODY_TOP + 130;
-  UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, barY, w, 12, value, UI_COLOR_ACCENT);
-  UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, barY + 6, 5, -1, UI_COLOR_MUTED);
-  UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, barY + 6, 5, 1, UI_COLOR_MUTED);
+  drawStepper(gfx, value);
+}
+
+// Level bar between the < and > buttons
+void CSettingsPage::drawStepper(Arduino_GFX &gfx, uint8_t percent) {
+  UI_drawLevelBar(gfx, (LCD_WIDTH - STEPPER_BAR_W) / 2, STEPPER_BAR_Y, STEPPER_BAR_W, 12, percent, UI_COLOR_ACCENT);
+  UI_drawArrowButton(gfx, ARROW_LEFT_X, ARROW_Y, UI_ARROW_BUTTON_W, UI_ARROW_BUTTON_H, -1, pressedDir < 0);
+  UI_drawArrowButton(gfx, ARROW_RIGHT_X, ARROW_Y, UI_ARROW_BUTTON_W, UI_ARROW_BUTTON_H, 1, pressedDir > 0);
 }
 
 void CSettingsPage::drawScreenSaver(Arduino_GFX &gfx) {
@@ -320,17 +380,12 @@ void CSettingsPage::drawScreenSaver(Arduino_GFX &gfx) {
   CONFIG_formatDuration(sec, text, sizeof(text));
   UI_drawCentered(gfx, "Screen saver", UI_BODY_TOP + 50, UI_FONT_LABEL, UI_COLOR_MUTED);
   UI_drawCentered(gfx, text, UI_BODY_TOP + 104, UI_FONT_LARGE, sec ? UI_COLOR_TEXT : UI_COLOR_MUTED);
-  const int16_t w = 160;
-  const int16_t barY = UI_BODY_TOP + 130;
-  const uint8_t level = saverPresetIndex(sec) * 100 / (SCREEN_SAVER_PRESET_COUNT - 1);
-  UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, barY, w, 12, level, UI_COLOR_ACCENT);
-  UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, barY + 6, 5, -1, UI_COLOR_MUTED);
-  UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, barY + 6, 5, 1, UI_COLOR_MUTED);
+  drawStepper(gfx, saverPresetIndex(sec) * 100 / (SCREEN_SAVER_PRESET_COUNT - 1));
   if (sec) {
-    UI_drawCentered(gfx, "Idle that long: dark,", UI_BODY_TOP + 172, UI_FONT_SMALL, UI_COLOR_MUTED);
-    UI_drawCentered(gfx, "half as long: dimmed", UI_BODY_TOP + 192, UI_FONT_SMALL, UI_COLOR_MUTED);
+    UI_drawCentered(gfx, "Idle that long: dark,", UI_BODY_TOP + 178, UI_FONT_SMALL, UI_COLOR_MUTED);
+    UI_drawCentered(gfx, "half as long: dimmed", UI_BODY_TOP + 198, UI_FONT_SMALL, UI_COLOR_MUTED);
   } else {
-    UI_drawCentered(gfx, "The screen stays on", UI_BODY_TOP + 172, UI_FONT_SMALL, UI_COLOR_MUTED);
+    UI_drawCentered(gfx, "The screen stays on", UI_BODY_TOP + 178, UI_FONT_SMALL, UI_COLOR_MUTED);
   }
 }
 

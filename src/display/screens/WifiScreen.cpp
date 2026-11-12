@@ -40,7 +40,8 @@ void CWifiScreen::drawWifiIcon(Arduino_GFX &gfx, int16_t cx, int16_t cy, uint8_t
 }
 
 bool CWifiScreen::onButton(ButtonId id, ButtonEvent event) {
-  if (id == ButtonId::BOOT && event == ButtonEvent::CLICK && device.getDisplay()) {
+  // OK (BOOT long press) or home (PWR long press) continue to the pages
+  if (event == ButtonEvent::LONG_PRESS && device.getDisplay()) {
     device.getDisplay()->show(ScreenId::HOME);
   }
   return false;

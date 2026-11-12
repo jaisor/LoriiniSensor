@@ -246,6 +246,9 @@ void CDevice::onButton(ButtonId id, ButtonEvent event) {
 
 void CDevice::handleTouch() {
   #ifdef TOUCH
+  #ifdef SCREEN
+  touch.setDoubleTap(display->wantsDoubleTap());
+  #endif
   TouchEvent event = touch.loop();
   const bool drop = inputActivity(touch.isTouched());
   if (event == TouchEvent::NONE) return;

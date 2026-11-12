@@ -75,4 +75,11 @@ void UI_drawGraph(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, 
 // Horizontal level bar, e.g. brightness
 void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color);
 
+// On-screen < / > button (dir -1 / 1) that responds to taps; lit while pressed
+#define UI_ARROW_BUTTON_W 46
+#define UI_ARROW_BUTTON_H 44
+#define UI_TOUCH_MARGIN   10    // Taps this far outside a button still count
+void UI_drawArrowButton(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, int8_t dir, bool pressed);
+bool UI_hit(int16_t px, int16_t py, int16_t x, int16_t y, int16_t w, int16_t h, int16_t margin = UI_TOUCH_MARGIN);
+
 #endif

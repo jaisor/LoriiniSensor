@@ -98,7 +98,7 @@ TouchEvent CTouch::loop() {
   tsPoll = millis();
 
   // A single tap is only certain once the double tap window has passed
-  if (tapPending && !touching && millis() - tsTap > TOUCH_DOUBLE_TAP_MS) {
+  if (tapPending && !touching && (!doubleTap || millis() - tsTap > TOUCH_DOUBLE_TAP_MS)) {
     tapPending = false;
     return TouchEvent::TAP;
   }
@@ -143,7 +143,7 @@ TouchEvent CTouch::loop() {
   touching = false;
   if (longFired) return TouchEvent::NONE;  // Already reported
   TouchEvent event = classify();
-  if (event != TouchEvent::TAP) {
+  if (event != TouchEvent::TAP || !doubleTap) {
     tapPending = false;
     return event;
   }

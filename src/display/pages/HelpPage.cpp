@@ -24,27 +24,27 @@ struct help_section_t {
 // 7-bit ASCII only; each line fits ~180px in its font (key: UI_FONT_LABEL, what: UI_FONT_SMALL)
 static const help_section_t SECTIONS[] = {
   { "Pages", {
-    { "PWR",        "next page" },
-    { "2x PWR",     "previous page" },
+    { "PWR / BOOT", "next / previous page" },
     { "Swipe",      "next / previous page" },
-    { "BOOT, 2x tap", "open the page" },
+    { "Hold BOOT, 2x tap", "open the page" },
+    { "Hold PWR",   "home, from anywhere" },
   }},
   { "Inside a page", {
-    { "PWR",        "next item, or more" },
-    { "2x PWR",     "previous item, or less" },
-    { "BOOT",       "select, confirm" },
-    { "Hold BOOT",  "back (or hold screen)" },
+    { "PWR / BOOT", "next / previous, + / -" },
+    { "Hold BOOT",  "select, save" },
+    { "2x PWR, 2x BOOT", "back without saving" },
+    { "Hold screen", "back to the pages" },
   }},
   { "Sensors", {
     { "Plug in",    "own page in a few s" },
-    { "Power page", "PWR next channel" },
-    { "Climate page", "PWR next graph" },
+    { "Power page", "PWR / BOOT: channel" },
+    { "Climate page", "PWR / BOOT: graph" },
     { "Unplugged",  "page goes after 1 min" },
   }},
   { "Settings", {
-    { "WiFi",       "BOOT forgets network" },
+    { "WiFi",       "hold BOOT to forget it" },
     { "Sensors",    "what was found" },
-    { "Brightness, Sound", "PWR +   2x PWR -" },
+    { "Values",     "PWR/BOOT or tap < >" },
     { "Web page",   "shunt resistors" },
   }},
   { "Screen saver", {
@@ -97,15 +97,11 @@ void CHelpPage::drawContent(Arduino_GFX &gfx) {
 }
 
 PageAction CHelpPage::onButton(ButtonId id, ButtonEvent event) {
-  if (id == ButtonId::POWER && event == ButtonEvent::CLICK) {
-    section = (section + 1) % SECTION_COUNT;
+  if (int8_t dir = PAGE_step(id, event)) {
+    section = (section + SECTION_COUNT + dir) % SECTION_COUNT;
     return PageAction::REDRAW;
   }
-  if (id == ButtonId::POWER && event == ButtonEvent::DOUBLE_CLICK) {
-    section = (section + SECTION_COUNT - 1) % SECTION_COUNT;
-    return PageAction::REDRAW;
-  }
-  if (id == ButtonId::BOOT && (event == ButtonEvent::CLICK || event == ButtonEvent::LONG_PRESS)) {
+  if (PAGE_isUp(id, event) || PAGE_isCancel(id, event)) {
     return PageAction::EXIT;
   }
   return PageAction::NONE;

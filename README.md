@@ -153,25 +153,36 @@ Power-cycle the board 3 times, each within 2 seconds of booting, or use **Factor
 A status bar (WiFi, time, battery) sits above a carousel of pages. There are no on-screen titles or button labels;
 the controls are the same everywhere, and the **Help** page on the device describes them:
 
-| | Browsing pages | Inside a page |
-|---|---|---|
-| **PWR** click | next page | next item / increase |
-| **PWR** double click | previous page | previous item / decrease |
-| Swipe left / right | next / previous page | |
-| **BOOT** click, or double tap | open the page | select / confirm |
-| **BOOT** hold | | back |
-| Long press on the screen | | back to the pages |
+| | Browsing pages | Inside a page | Editing a value |
+|---|---|---|---|
+| **PWR** click | next page | next item | increase |
+| **BOOT** click | previous page | previous item | decrease |
+| **PWR** double click | | one level up (closes the page at the top) | back, without saving |
+| **PWR** hold | home | home | home, without saving |
+| **BOOT** hold | open the page | select | save |
+| **BOOT** double click | | cancel, one level up | cancel: the old value comes back |
+| Swipe left / right | next / previous page | | |
+| Double tap | open the page | | |
+| Tap **<** / **>** | | | decrease / increase |
+| Long press on the screen | | back to the pages | back to the pages, without saving |
+
+Home is the first sensor page, or Settings while no sensor is connected. Values (brightness, screen saver,
+sound) apply as they change, so you see or hear them, but only a BOOT hold keeps them; going up, home or
+cancelling puts the old value back.
 
 - **One page per sensor**, sorted by I2C address. Power monitors: current, voltage and power, with a graph of the
-  last 20 seconds of current once opened; on an INA3221 the card shows all three channels and PWR steps through
-  them. Environment sensors: temperature, then humidity, pressure and gas resistance as the sensor has them; opened,
-  one value at a time with its minimum, maximum and a graph of the last 10 minutes, PWR stepping through the values.
+  last 20 seconds of current once opened; on an INA3221 the card shows all three channels and PWR / BOOT step
+  through them. Environment sensors: temperature, then humidity, pressure and gas resistance as the sensor has them; opened,
+  one value at a time with its minimum, maximum and a graph of the last 10 minutes, PWR / BOOT stepping through
+  the values.
   With no sensors connected a "Sensors" page shows where to connect one.
-- **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensors (what was found, and
-  whether it answers), screen brightness, screen saver, button sounds volume, About
+- **Settings** - WiFi (details; a BOOT hold forgets the network and restarts in setup mode), Sensors (what was
+  found, and whether it answers), screen brightness, screen saver, button sounds volume, About. The values have
+  on-screen **<** and **>** buttons to tap besides the PWR / BOOT clicks.
 - **Help** - buttons and gestures, sensors, Settings, power, web setup
 
-In setup mode the screen shows how to join the device's WiFi; press **BOOT** or double tap to go to the pages instead.
+In setup mode the screen shows how to join the device's WiFi; hold **BOOT** or **PWR**, or double tap, to go to the
+pages instead.
 
 ## Screen saver
 
@@ -189,4 +200,4 @@ or 0 to mute, under Settings › Sound or on the Device web page. **RST** always
 download mode.
 
 On battery, press **PWR** to switch on; the firmware latches power on at boot and ignores that first press. Hold
-**PWR** for 3 seconds to switch off (on USB power the board keeps running).
+**PWR** for 3 seconds to switch off (on USB power the board keeps running); on the way it goes home at 0.7s.

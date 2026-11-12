@@ -35,6 +35,7 @@ public:
   #ifdef TOUCH
   // Touch gesture, passed to the screen that is showing; true if it acted on it
   bool onTouch(TouchEvent event, int16_t x, int16_t y);
+  bool wantsDoubleTap() const { return !current || current->wantsDoubleTap(); }
   #endif
 
   // Overlay drawn on top of whatever screen is showing

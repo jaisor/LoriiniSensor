@@ -62,7 +62,7 @@ ScreenId CDisplay::screenForState(DeviceState state) {
     case DeviceState::INITIALIZING:
       return ScreenId::BOOT;
     case DeviceState::WIFI_AP_CREATED:
-      return ScreenId::WIFI_STATUS;   // How to join and configure; BOOT continues to HOME
+      return ScreenId::WIFI_STATUS;   // How to join and configure; a long press continues to HOME
     case DeviceState::WIFI_CONNECTING:
     case DeviceState::WIFI_CONNECTED:
     case DeviceState::WIFI_OFFLINE:

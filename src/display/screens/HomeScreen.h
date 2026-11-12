@@ -16,10 +16,12 @@ class CSensorPage;
 // Status bar over a carousel of pages: one per detected sensor (or a "none found" page), Settings,
 // Help. The sensor pages follow CSensors: added and dropped as sensors come and go, while the page
 // being shown stays in place.
-//   Browsing: PWR click or swipe left = next page (slides in from the right), PWR double click or swipe
-//             right = previous, BOOT click or double tap = open.
-//   Opened:   buttons go to the page; it returns PageAction::EXIT (BOOT long press by convention) to browse
-//             again. A long press on the screen leaves the page from anywhere in it.
+//   Browsing: PWR click or swipe left = next page (slides in from the right), BOOT click or swipe
+//             right = previous, BOOT long press or double tap = open.
+//   Opened:   buttons and touches go to the page; it returns PageAction::EXIT (PWR double click at its
+//             top level, by convention) to browse again. A long press on the screen leaves the page from
+//             anywhere in it.
+//   Anywhere: PWR long press = home, the first sensor page (Settings while there are none).
 class CHomeScreen : public CScreen {
 
 public:
@@ -32,6 +34,7 @@ public:
   bool onButton(ButtonId id, ButtonEvent event) override;
   #ifdef TOUCH
   bool onTouch(TouchEvent event, int16_t x, int16_t y) override;
+  bool wantsDoubleTap() const override { return !opened; }   // Double tap opens; pages get quick taps
   #endif
 
 private:
@@ -58,6 +61,9 @@ private:
   void syncSensorPages();       // Pages for the sensors CSensors has now
   void open();
   void close();
+  uint8_t homeIndex() const;
+  void goHome();                // PWR long press: closes the page, shows the first sensor (or Settings)
+  PageAction handle(PageAction action);
   void slide(int8_t dir);
   void drawCard(Arduino_GFX &gfx, uint8_t page, int16_t dx);
 };

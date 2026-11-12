@@ -38,6 +38,8 @@ public:
   #ifdef TOUCH
   // Touch gesture (reported when the finger lifts) at its last point; return true to redraw
   virtual bool onTouch(TouchEvent event, int16_t x, int16_t y) { return false; }
+  // False to get taps on lift, without waiting to see whether a second one follows (no DOUBLE_TAP)
+  virtual bool wantsDoubleTap() const { return true; }
   #endif
 
   void invalidate() { dirty = true; }

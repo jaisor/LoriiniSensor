@@ -217,6 +217,22 @@ void UI_drawGraph(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, 
   }
 }
 
+void UI_drawArrowButton(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, int8_t dir, bool pressed) {
+  gfx.fillRoundRect(x, y, w, h, 10, pressed ? UI_COLOR_ACCENT : UI_COLOR_PANEL);
+  if (!pressed) {
+    gfx.drawRoundRect(x, y, w, h, 10, UI_COLOR_DIVIDER);
+  }
+  // Two 2px chevrons side by side make a 4px stroke
+  const int16_t cx = x + w / 2, cy = y + h / 2;
+  const uint16_t color = pressed ? UI_COLOR_BG : UI_COLOR_TEXT;
+  UI_drawChevron(gfx, cx - dir, cy, 10, dir, color);
+  UI_drawChevron(gfx, cx + dir, cy, 10, dir, color);
+}
+
+bool UI_hit(int16_t px, int16_t py, int16_t x, int16_t y, int16_t w, int16_t h, int16_t margin) {
+  return px >= x - margin && px < x + w + margin && py >= y - margin && py < y + h + margin;
+}
+
 void UI_drawLevelBar(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint16_t color) {
   gfx.fillRoundRect(x, y, w, h, h / 2, UI_COLOR_DIVIDER);
   int16_t fill = w * min<uint8_t>(percent, 100) / 100;

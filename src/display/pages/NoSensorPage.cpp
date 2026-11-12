@@ -42,7 +42,7 @@ void CNoSensorPage::drawContent(Arduino_GFX &gfx) {
 }
 
 PageAction CNoSensorPage::onButton(ButtonId id, ButtonEvent event) {
-  if (id == ButtonId::BOOT && (event == ButtonEvent::LONG_PRESS || event == ButtonEvent::CLICK)) {
+  if (PAGE_isUp(id, event) || PAGE_isCancel(id, event)) {
     return PageAction::EXIT;
   }
   return PageAction::NONE;

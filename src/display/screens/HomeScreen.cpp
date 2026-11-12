@@ -158,28 +158,48 @@ void CHomeScreen::slide(int8_t dir) {
   Log.verboseln("Home: page %s", pages[index]->getTitle());
 }
 
-bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
+// First sensor page, or Settings while there are none (the "none found" page comes first then)
+uint8_t CHomeScreen::homeIndex() const {
+  #ifdef SENSORS
+  if (sensorPageCount > 0) return 0;
+  #endif
+  for (uint8_t i = 0; i < pageCount; i++) {
+    if (pages[i] == settings) return i;
+  }
+  return 0;
+}
+
+void CHomeScreen::goHome() {
   if (opened) {
-    switch (pages[index]->onButton(id, event)) {
-      case PageAction::EXIT:
-        close();
-        return true;
-      case PageAction::REDRAW:
-        return true;
-      default:
-        return false;
-    }
+    close();   // Drops an unsaved edit
+  }
+  sliding = false;
+  index = homeIndex();
+  Log.verboseln("Home: page %s", pages[index]->getTitle());
+}
+
+PageAction CHomeScreen::handle(PageAction action) {
+  if (action == PageAction::EXIT) {
+    close();
+  }
+  return action;
+}
+
+bool CHomeScreen::onButton(ButtonId id, ButtonEvent event) {
+  if (PAGE_isHome(id, event)) {
+    goHome();
+    return true;
   }
 
-  if (id == ButtonId::POWER && event == ButtonEvent::CLICK) {
-    slide(1);
+  if (opened) {
+    return handle(pages[index]->onButton(id, event)) != PageAction::NONE;
+  }
+
+  if (int8_t dir = PAGE_step(id, event)) {
+    slide(dir);
     return true;
   }
-  if (id == ButtonId::POWER && event == ButtonEvent::DOUBLE_CLICK) {
-    slide(-1);
-    return true;
-  }
-  if (id == ButtonId::BOOT && event == ButtonEvent::CLICK) {
+  if (PAGE_isOk(id, event)) {
     open();
     return true;
   }
@@ -194,7 +214,7 @@ bool CHomeScreen::onTouch(TouchEvent event, int16_t x, int16_t y) {
       close();
       return true;
     }
-    return false;
+    return handle(pages[index]->onTouch(event, x, y)) != PageAction::NONE;
   }
   if (event == TouchEvent::DOUBLE_TAP) {
     open();

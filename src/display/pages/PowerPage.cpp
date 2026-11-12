@@ -105,11 +105,12 @@ void CPowerPage::drawContent(Arduino_GFX &gfx) {
 PageAction CPowerPage::onButton(ButtonId id, ButtonEvent event) {
   const CPowerSensor *s = power();
   const uint8_t channels = s ? s->getChannelCount() : 1;
-  if (id == ButtonId::POWER && channels > 1 && (event == ButtonEvent::CLICK || event == ButtonEvent::DOUBLE_CLICK)) {
-    channel = (channel + (event == ButtonEvent::CLICK ? 1 : channels - 1)) % channels;
+  const int8_t dir = PAGE_step(id, event);
+  if (dir && channels > 1) {
+    channel = (channel + channels + dir) % channels;
     return PageAction::REDRAW;
   }
-  if (id == ButtonId::BOOT && (event == ButtonEvent::LONG_PRESS || event == ButtonEvent::CLICK)) {
+  if (PAGE_isUp(id, event) || PAGE_isCancel(id, event)) {
     return PageAction::EXIT;
   }
   return PageAction::NONE;

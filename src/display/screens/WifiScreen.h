@@ -3,7 +3,7 @@
 #include "display/Screen.h"
 
 // Network status: connecting / setup access point / connected with the web server address / offline.
-// CDisplay shows it in setup mode (WIFI_AP_CREATED); BOOT click or a double tap continues to the home screen.
+// CDisplay shows it in setup mode (WIFI_AP_CREATED); a BOOT or PWR long press, or a double tap, continues to the home screen.
 class CWifiScreen : public CScreen {
 
 public:

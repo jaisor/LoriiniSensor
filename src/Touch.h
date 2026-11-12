@@ -8,7 +8,8 @@
 
 enum class TouchEvent : uint8_t {
   NONE = 0,
-  TAP,           // Reported once the double tap window has passed without a second tap
+  TAP,           // Reported once the double tap window has passed without a second tap (on lift
+                 // when double taps are off)
   DOUBLE_TAP,
   LONG_PRESS,    // Reported while still touching, once TOUCH_LONG_PRESS_MS is reached without moving
   SWIPE_LEFT,    // Finger moved right to left
@@ -42,8 +43,13 @@ public:
   TouchEvent loop();
 
   bool isTouched() const { return touching; }
-  int16_t getX() const { return lastX; }  // Last point of the current / previous touch
-  int16_t getY() const { return lastY; }
+  // Last point of the current / previous touch, in screen coordinates (TOUCH_MIRROR_X/Y applied)
+  int16_t getX() const { return TOUCH_MIRROR_X ? LCD_WIDTH - 1 - lastX : lastX; }
+  int16_t getY() const { return TOUCH_MIRROR_Y ? LCD_HEIGHT - 1 - lastY : lastY; }
+
+  // Off: taps are reported as soon as the finger lifts and DOUBLE_TAP never is - for screens with
+  // buttons to tap quickly, which would otherwise wait out the double tap window (and pair up)
+  void setDoubleTap(bool enabled) { doubleTap = enabled; }
 
 private:
   bool ready;
@@ -55,6 +61,7 @@ private:
   unsigned long tsTouchStart;
   bool moved;               // Went past TOUCH_TAP_MAX_PX at some point during this touch
   bool longFired;           // LONG_PRESS already reported for this touch
+  bool doubleTap = true;
   bool tapPending;          // A tap waiting to see if a second one follows
   unsigned long tsTap;
 

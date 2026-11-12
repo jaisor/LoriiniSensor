@@ -123,11 +123,12 @@ PageAction CEnvPage::onButton(ButtonId id, ButtonEvent event) {
   const CEnvSensor *s = env();
   EnvValue values[ENV_VALUE_COUNT];
   const uint8_t n = s ? valuesOf(*s, values) : 1;
-  if (id == ButtonId::POWER && n > 1 && (event == ButtonEvent::CLICK || event == ButtonEvent::DOUBLE_CLICK)) {
-    selected = (selected + (event == ButtonEvent::CLICK ? 1 : n - 1)) % n;
+  const int8_t dir = PAGE_step(id, event);
+  if (dir && n > 1) {
+    selected = (selected + n + dir) % n;
     return PageAction::REDRAW;
   }
-  if (id == ButtonId::BOOT && (event == ButtonEvent::LONG_PRESS || event == ButtonEvent::CLICK)) {
+  if (PAGE_isUp(id, event) || PAGE_isCancel(id, event)) {
     return PageAction::EXIT;
   }
   return PageAction::NONE;
