@@ -185,7 +185,7 @@ const char htmlWifi[] = R"=====(
 )=====";
 
 // board, chip model, revision, flash MB, PSRAM MB, MAC, name, timezone options,
-// brightness min, brightness value, brightness value (label), volume, volume (label),
+// brightness min, brightness value, brightness value (label), screen saver options, volume, volume (label),
 // detected sensors (HTML), INA219 shunt mOhm, INA3221 shunt mOhm, export file name
 const char htmlDevice[] = R"=====(
       <h3>Device Settings</h3>
@@ -216,6 +216,14 @@ const char htmlDevice[] = R"=====(
             <input type='range' id='screenBrightness' name='screenBrightness' min='%d' max='100' value='%d'
               oninput='document.getElementById("brightnessValue").textContent = this.value'>
             <sub><small><span id='brightnessValue'>%d</span>%%</small></sub>
+          </label>
+          <label>
+            Screen saver
+            <select name='screenSaverSec' id='screenSaverSec'>
+              %s
+            </select>
+            <sub><small>Without a button press or touch for this long the screen goes dark, dimming to half
+              brightness halfway there. The press or touch that wakes it does nothing else.</small></sub>
           </label>
           <label>
             Button sounds volume

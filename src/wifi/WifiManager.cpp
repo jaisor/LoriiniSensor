@@ -416,6 +416,11 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       }
     }
 
+    if (request->hasArg("screenSaverSec")) {
+      long sec = request->arg("screenSaverSec").toInt();
+      if (CONFIG_isValidScreenSaver(sec)) configuration.screenSaverSec = sec;   // The display restarts its idle time
+    }
+
     if (request->hasArg("buzzerVolume")) {
       long v = request->arg("buzzerVolume").toInt();
       configuration.buzzerVolume = constrain(v, 0, 100);
@@ -466,6 +471,25 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
     brightnessMin = SCREEN_MIN_BRIGHTNESS;
     #endif
 
+    // Screen saver presets, plus the current value if it was set to something else (config import)
+    String saverOptions;
+    bool saverListed = false;
+    for (uint8_t i = 0; i <= SCREEN_SAVER_PRESET_COUNT; i++) {
+      uint16_t sec;
+      if (i < SCREEN_SAVER_PRESET_COUNT) {
+        sec = SCREEN_SAVER_PRESETS[i];
+      } else if (!saverListed) {
+        sec = configuration.screenSaverSec;
+      } else {
+        break;
+      }
+      bool selected = sec == configuration.screenSaverSec;
+      saverListed |= selected;
+      char label[16];
+      CONFIG_formatDuration(sec, label, sizeof(label));
+      saverOptions += String("<option value='") + sec + "'" + (selected ? " selected" : "") + ">" + label + "</option>";
+    }
+
     // Detected sensors, as a list
     String sensorList;
     #ifdef SENSORS
@@ -487,7 +511,7 @@ void CWifiManager::handleDevice(AsyncWebServerRequest *request) {
       (unsigned)(CONFIG_getFlashChipSize() / (1024 * 1024)), (unsigned)(ESP.getPsramSize() / (1024 * 1024)),
       WiFi.macAddress().c_str(),
       configuration.name, tzOptions.c_str(),
-      brightnessMin, brightness, brightness,
+      brightnessMin, brightness, brightness, saverOptions.c_str(),
       configuration.buzzerVolume, configuration.buzzerVolume,
       sensorList.c_str(), (unsigned)configuration.ina219ShuntMilliOhm, (unsigned)configuration.ina3221ShuntMilliOhm,
       configuration.name);
@@ -590,6 +614,7 @@ void CWifiManager::handleRestAPI_Config(AsyncWebServerRequest *request) {
 
   #ifdef SCREEN
   configJson["screenBrightness"] = configuration.screenBrightness;
+  configJson["screenSaverSec"] = configuration.screenSaverSec;
   #endif
   configJson["buzzerVolume"] = configuration.buzzerVolume;
   configJson["ina219ShuntMilliOhm"] = configuration.ina219ShuntMilliOhm;
@@ -686,6 +711,14 @@ bool CWifiManager::updateConfigFromJson(JsonDocument jsonObj, String *error) {
       return false;
     }
     c.screenBrightness = b;
+  }
+  if (!jsonObj["screenSaverSec"].isNull()) {
+    long sec = jsonObj["screenSaverSec"].as<long>();
+    if (!CONFIG_isValidScreenSaver(sec)) {
+      if (error) *error = "screenSaverSec must be 0 (off) or " + String(SCREEN_SAVER_MIN_SEC) + " to " + String(SCREEN_SAVER_MAX_SEC);
+      return false;
+    }
+    c.screenSaverSec = sec;
   }
   #endif
 

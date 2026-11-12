@@ -14,7 +14,8 @@
 
 CDisplay::CDisplay(CDevice &device)
 : device(device), bus(nullptr), panel(nullptr), canvas(nullptr), ready(false), screens{}, current(nullptr),
-  appliedBrightness(0), tsLastFlush(0), message{}, tsMessageEnd(0), messageShowing(false) {
+  appliedBrightness(0), tsLastFlush(0), saver(SaverState::AWAKE), tsActivity(0), appliedSaverSec(0),
+  message{}, tsMessageEnd(0), messageShowing(false) {
 }
 
 CDisplay::~CDisplay() {
@@ -51,6 +52,8 @@ void CDisplay::begin() {
   show(screenForState(device.getState()));
   render();
   applyBrightness();
+  tsActivity = millis();
+  appliedSaverSec = configuration.screenSaverSec;
 }
 
 // The extension point for state driven UI: which screen each device state shows
@@ -123,18 +126,74 @@ void CDisplay::showMessage(const char *text, unsigned long durationMs) {
 
 void CDisplay::applyBrightness() {
   appliedBrightness = configuration.screenBrightness;
+  uint32_t level = appliedBrightness;
+  if (saver == SaverState::DIM) {
+    level = (level + 1) / 2;
+  } else if (saver == SaverState::DARK) {
+    level = 0;
+  }
   // Perceived brightness is roughly quadratic in duty cycle
   uint32_t max = (1 << BACKLIGHT_PWM_BITS) - 1;
-  uint32_t duty = (uint32_t)appliedBrightness * appliedBrightness * max / 10000;
+  uint32_t duty = level * level * max / 10000;
   ledcWrite(LCD_BL, duty);
+}
+
+CDisplay::SaverState CDisplay::saverStateFor(unsigned long idleMs) const {
+  if (configuration.screenSaverSec == 0) return SaverState::AWAKE;
+  unsigned long timeoutMs = (unsigned long)configuration.screenSaverSec * 1000;
+  if (idleMs >= timeoutMs) return SaverState::DARK;
+  if (idleMs >= timeoutMs / 2) return SaverState::DIM;
+  return SaverState::AWAKE;
+}
+
+void CDisplay::setSaver(SaverState state) {
+  const SaverState was = saver;
+  saver = state;
+  if (state == SaverState::DARK) {
+    Log.verboseln("Screen saver: dark");
+    applyBrightness();
+    panel->displayOff();   // Panel sleep; its memory keeps the frame
+  } else {
+    if (was == SaverState::DARK) {
+      Log.verboseln("Screen saver: awake");
+      panel->displayOn();
+      current->invalidate();
+      render();            // Up to date before the backlight comes on
+    } else if (state == SaverState::DIM) {
+      Log.verboseln("Screen saver: dimmed");
+    }
+    applyBrightness();
+  }
+}
+
+bool CDisplay::wake() {
+  tsActivity = millis();
+  if (!ready || !current || saver == SaverState::AWAKE) return false;
+  const bool wasDark = saver == SaverState::DARK;
+  setSaver(SaverState::AWAKE);
+  return wasDark;
 }
 
 void CDisplay::loop() {
   if (!ready || !current) return;
 
+  // Screen saver; a new duration (Settings or the web page) counts from now
+  if (appliedSaverSec != configuration.screenSaverSec) {
+    appliedSaverSec = configuration.screenSaverSec;
+    tsActivity = millis();
+  }
+  const SaverState state = saverStateFor(millis() - tsActivity);
+  if (state != saver) {
+    setSaver(state);
+  }
+
   // Changed from the web UI (another task); applied here so it takes effect live
   if (appliedBrightness != configuration.screenBrightness) {
     applyBrightness();
+  }
+
+  if (saver == SaverState::DARK) {
+    return;   // Nothing to draw; wake() renders a fresh frame
   }
 
   if (messageShowing && (long)(millis() - tsMessageEnd) >= 0) {

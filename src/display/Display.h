@@ -40,6 +40,11 @@ public:
   // Overlay drawn on top of whatever screen is showing
   void showMessage(const char *message, unsigned long durationMs);
 
+  // Screen saver: a button is down or the screen touched. Restarts the idle time and restores the
+  // brightness; true if the screen was dark, in which case the input only wakes it (the caller drops it).
+  bool wake();
+  bool isDark() const { return saver == SaverState::DARK; }
+
   bool isReady() const { return ready; }
 
 private:
@@ -55,12 +60,20 @@ private:
   uint8_t appliedBrightness;
   unsigned long tsLastFlush;
 
+  // Screen saver (configuration.screenSaverSec): DIM at half the idle time, DARK at all of it
+  enum class SaverState : uint8_t { AWAKE, DIM, DARK };
+  SaverState saver;
+  unsigned long tsActivity;      // Last button press or touch
+  uint16_t appliedSaverSec;      // Changing the duration restarts the idle time
+
   char message[64];
   unsigned long tsMessageEnd;
   bool messageShowing;
 
   ScreenId screenForState(DeviceState state);
   void applyBrightness();
+  SaverState saverStateFor(unsigned long idleMs) const;
+  void setSaver(SaverState state);
   void render();
   void drawMessage();
 };

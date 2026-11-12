@@ -47,6 +47,12 @@ static const help_section_t SECTIONS[] = {
     { "Brightness, Sound", "PWR +   2x PWR -" },
     { "Web page",   "shunt resistors" },
   }},
+  { "Screen saver", {
+    { "Idle half the time", "the screen dims" },
+    { "Idle all of it",  "the screen goes dark" },
+    { "Button or touch", "only wakes it up" },
+    { "Set the time",    "Settings, web page" },
+  }},
   { "Power", {
     { "Hold PWR 3s", "switch off (on battery)" },
     { "RST",         "restart" },

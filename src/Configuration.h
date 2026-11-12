@@ -66,6 +66,12 @@
 
 #define BUZZER_VOLUME 50            // Percent on factory reset, 0 mutes
 
+// Screen saver: without a button press or touch for this long the screen goes dark, dimming to half
+// brightness halfway there. 0 turns it off.
+#define SCREEN_SAVER_SEC 300        // On factory reset
+#define SCREEN_SAVER_MIN_SEC 10
+#define SCREEN_SAVER_MAX_SEC 3600
+
 // Power monitor shunt resistors, the same for every chip of a model (and every INA3221 channel)
 #define INA219_DEFAULT_SHUNT_MOHM 100   // The common breakout boards use an R100 (0.1 ohm) shunt
 #define INA3221_DEFAULT_SHUNT_MOHM 100
@@ -113,6 +119,9 @@ struct configuration_t {
   uint8_t mqttDiscovery;         // Home Assistant discovery
   uint16_t mqttIntervalSec;      // Sensor values every, 1..MQTT_MAX_INTERVAL_SEC
   char _mqttLoaded[4];           // "mq1"
+
+  uint16_t screenSaverSec;       // 0 (never) or SCREEN_SAVER_MIN_SEC..SCREEN_SAVER_MAX_SEC
+  char _screenSaverLoaded[4];    // "ss1"
 };
 
 extern configuration_t configuration;
@@ -134,6 +143,12 @@ unsigned long CONFIG_getUpTime();
 String CONFIG_getChipModel();
 uint8_t CONFIG_getChipRevision();
 uint32_t CONFIG_getFlashChipSize();
+
+// Screen saver durations offered by the Settings screen and the web page, ascending, 0 = off
+extern const uint16_t SCREEN_SAVER_PRESETS[];
+extern const uint8_t SCREEN_SAVER_PRESET_COUNT;
+bool CONFIG_isValidScreenSaver(long sec);
+void CONFIG_formatDuration(uint16_t sec, char *out, size_t size);   // "Off", "30 s", "5 min", "1 h"
 
 bool CONFIG_isTimeSynced();  // The clock holds real time, i.e. NTP has answered since boot
 const char* CONFIG_getTzString(long gmtOffset_sec);  // POSIX TZ for a UTC offset, see Configuration.cpp

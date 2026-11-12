@@ -9,7 +9,7 @@
 
 #define LEVEL_STEP 10
 
-const char* const CSettingsPage::ITEM_LABELS[ITEM_COUNT] = { "WiFi", "Sensors", "Brightness", "Sound", "About", "Back" };
+const char* const CSettingsPage::ITEM_LABELS[ITEM_COUNT] = { "WiFi", "Sensors", "Brightness", "Screen saver", "Sound", "About", "Back" };
 
 // Gear icon centered on cx,cy; hole is drawn in the card's color
 static void drawGearIcon(Arduino_GFX &gfx, int16_t cx, int16_t cy, uint16_t color, uint16_t holeColor) {
@@ -31,6 +31,23 @@ static void drawField(Arduino_GFX &gfx, int16_t y, const char *label, const char
 static uint8_t stepLevel(uint8_t value, int8_t dir, uint8_t minValue) {
   int v = dir > 0 ? (value / LEVEL_STEP + 1) * LEVEL_STEP : ((value + LEVEL_STEP - 1) / LEVEL_STEP - 1) * LEVEL_STEP;
   return constrain(v, minValue, 100);
+}
+
+// Index of the screen saver preset at or below a duration (one set on the web may be in between)
+static uint8_t saverPresetIndex(uint16_t sec) {
+  uint8_t i = 0;
+  while (i + 1 < SCREEN_SAVER_PRESET_COUNT && SCREEN_SAVER_PRESETS[i + 1] <= sec) i++;
+  return i;
+}
+
+// The next longer / shorter preset, stopping at the ends
+static uint16_t stepScreenSaver(uint16_t sec, int8_t dir) {
+  uint8_t i = saverPresetIndex(sec);
+  if (dir > 0) {
+    return SCREEN_SAVER_PRESETS[min<uint8_t>(i + 1, SCREEN_SAVER_PRESET_COUNT - 1)];
+  }
+  if (SCREEN_SAVER_PRESETS[i] < sec) return SCREEN_SAVER_PRESETS[i];   // Down to the preset below
+  return SCREEN_SAVER_PRESETS[i > 0 ? i - 1 : 0];
 }
 
 void CSettingsPage::drawCard(Arduino_GFX &gfx, int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -92,6 +109,7 @@ PageAction CSettingsPage::onButton(ButtonId id, ButtonEvent event) {
           case ITEM_WIFI:       view = View::NETWORK; break;
           case ITEM_SENSOR:     view = View::SENSOR; break;
           case ITEM_BRIGHTNESS: view = View::BRIGHTNESS; break;
+          case ITEM_SCREEN_SAVER: view = View::SCREEN_SAVER; break;
           case ITEM_VOLUME:     view = View::VOLUME; break;
           case ITEM_ABOUT:      view = View::ABOUT; break;
           default:              return PageAction::EXIT;  // Back
@@ -117,6 +135,7 @@ PageAction CSettingsPage::onButton(ButtonId id, ButtonEvent event) {
       break;
 
     case View::BRIGHTNESS:
+    case View::SCREEN_SAVER:
     case View::VOLUME: {
       if (select || back) {
         leaveLevelView();
@@ -129,6 +148,8 @@ PageAction CSettingsPage::onButton(ButtonId id, ButtonEvent event) {
           #ifdef SCREEN
           configuration.screenBrightness = stepLevel(configuration.screenBrightness, dir, SCREEN_MIN_BRIGHTNESS);  // Applied by the display loop
           #endif
+        } else if (view == View::SCREEN_SAVER) {
+          configuration.screenSaverSec = stepScreenSaver(configuration.screenSaverSec, dir);  // Counts from now
         } else {
           configuration.buzzerVolume = stepLevel(configuration.buzzerVolume, dir, 0);  // The button sound plays at the new level
         }
@@ -155,17 +176,18 @@ void CSettingsPage::drawContent(Arduino_GFX &gfx) {
     case View::FORGET_WIFI: drawForgetWifi(gfx); break;
     case View::SENSOR:      drawSensors(gfx); break;
     case View::BRIGHTNESS:  drawLevel(gfx, "Screen brightness", configuration.screenBrightness, nullptr); break;
+    case View::SCREEN_SAVER: drawScreenSaver(gfx); break;
     case View::VOLUME:      drawLevel(gfx, "Button sounds", configuration.buzzerVolume, "Off"); break;
     case View::ABOUT:       drawAbout(gfx); break;
   }
 }
 
 void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
-  const int16_t rowH = 34;
+  const int16_t rowH = 30;   // ITEM_COUNT rows end above UI_BODY_BOTTOM
   const int16_t left = SCREEN_SAFE_INSET + 6;
   const int16_t width = LCD_WIDTH - 2 * left;
   for (uint8_t i = 0; i < ITEM_COUNT; i++) {
-    int16_t y = UI_BODY_TOP + 6 + i * rowH;
+    int16_t y = UI_BODY_TOP + 4 + i * rowH;
     bool sel = i == selected;
     if (sel) {
       gfx.fillRoundRect(left, y, width, rowH - 2, 8, UI_COLOR_PANEL);
@@ -173,7 +195,7 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
     }
     gfx.setFont(UI_FONT_LABEL);
     gfx.setTextColor(sel ? UI_COLOR_TEXT : UI_COLOR_MUTED);
-    gfx.setCursor(left + 14, y + 22);
+    gfx.setCursor(left + 14, y + 20);
     gfx.print(ITEM_LABELS[i]);
 
     // Current value or a chevron on the right
@@ -184,6 +206,8 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
       #ifdef SENSORS
       snprintf(value, sizeof(value), "%u", device.getSensors().getCount());
       #endif
+    } else if (i == ITEM_SCREEN_SAVER) {
+      CONFIG_formatDuration(configuration.screenSaverSec, value, sizeof(value));
     } else if (i == ITEM_VOLUME) {
       if (configuration.buzzerVolume) snprintf(value, sizeof(value), "%u%%", configuration.buzzerVolume);
       else strcpy(value, "Off");
@@ -191,7 +215,7 @@ void CSettingsPage::drawMenu(Arduino_GFX &gfx) {
     if (value[0]) {
       uint16_t w = UI_textWidth(gfx, value, UI_FONT_SMALL);
       gfx.setTextColor(UI_COLOR_MUTED);
-      gfx.setCursor(left + width - 12 - w, y + 22);
+      gfx.setCursor(left + width - 12 - w, y + 20);
       gfx.print(value);
     } else if (i != ITEM_BACK) {
       UI_drawChevron(gfx, left + width - 16, y + rowH / 2 - 1, 5, 1, sel ? UI_COLOR_TEXT : UI_COLOR_DIVIDER);
@@ -288,6 +312,26 @@ void CSettingsPage::drawLevel(Arduino_GFX &gfx, const char *label, uint8_t value
   UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, barY, w, 12, value, UI_COLOR_ACCENT);
   UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, barY + 6, 5, -1, UI_COLOR_MUTED);
   UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, barY + 6, 5, 1, UI_COLOR_MUTED);
+}
+
+void CSettingsPage::drawScreenSaver(Arduino_GFX &gfx) {
+  char text[12];
+  const uint16_t sec = configuration.screenSaverSec;
+  CONFIG_formatDuration(sec, text, sizeof(text));
+  UI_drawCentered(gfx, "Screen saver", UI_BODY_TOP + 50, UI_FONT_LABEL, UI_COLOR_MUTED);
+  UI_drawCentered(gfx, text, UI_BODY_TOP + 104, UI_FONT_LARGE, sec ? UI_COLOR_TEXT : UI_COLOR_MUTED);
+  const int16_t w = 160;
+  const int16_t barY = UI_BODY_TOP + 130;
+  const uint8_t level = saverPresetIndex(sec) * 100 / (SCREEN_SAVER_PRESET_COUNT - 1);
+  UI_drawLevelBar(gfx, (LCD_WIDTH - w) / 2, barY, w, 12, level, UI_COLOR_ACCENT);
+  UI_drawChevron(gfx, (LCD_WIDTH - w) / 2 - 16, barY + 6, 5, -1, UI_COLOR_MUTED);
+  UI_drawChevron(gfx, (LCD_WIDTH + w) / 2 + 16, barY + 6, 5, 1, UI_COLOR_MUTED);
+  if (sec) {
+    UI_drawCentered(gfx, "Idle that long: dark,", UI_BODY_TOP + 172, UI_FONT_SMALL, UI_COLOR_MUTED);
+    UI_drawCentered(gfx, "half as long: dimmed", UI_BODY_TOP + 192, UI_FONT_SMALL, UI_COLOR_MUTED);
+  } else {
+    UI_drawCentered(gfx, "The screen stays on", UI_BODY_TOP + 172, UI_FONT_SMALL, UI_COLOR_MUTED);
+  }
 }
 
 void CSettingsPage::drawAbout(Arduino_GFX &gfx) {

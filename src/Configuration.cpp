@@ -142,6 +142,16 @@ void EEPROM_loadConfig() {
     configuration.mqttIntervalSec = CONFIG_MQTT_INTERVAL_SEC;
   }
 
+  if (strncmp(configuration._screenSaverLoaded, "ss1", sizeof(configuration._screenSaverLoaded))) {
+    Log.infoln("No screen saver configuration, loading defaults");
+    strcpy(configuration._screenSaverLoaded, "ss1");
+    configuration.screenSaverSec = SCREEN_SAVER_SEC;
+  }
+  if (!CONFIG_isValidScreenSaver(configuration.screenSaverSec)) {
+    Log.verboseln("Invalid screenSaverSec");
+    configuration.screenSaverSec = SCREEN_SAVER_SEC;
+  }
+
   // Strings come straight from flash, make sure they end
   configuration.name[sizeof(configuration.name) - 1] = '\0';
   if (!strlen(configuration.name)) {
@@ -203,6 +213,25 @@ uint32_t CONFIG_getFlashChipSize() {
 static unsigned long tMillisUp = millis();
 unsigned long CONFIG_getUpTime() {
   return millis() - tMillisUp;
+}
+
+const uint16_t SCREEN_SAVER_PRESETS[] = { 0, 15, 30, 60, 120, 300, 600, 900, 1800, 3600 };
+const uint8_t SCREEN_SAVER_PRESET_COUNT = sizeof(SCREEN_SAVER_PRESETS) / sizeof(SCREEN_SAVER_PRESETS[0]);
+
+bool CONFIG_isValidScreenSaver(long sec) {
+  return sec == 0 || (sec >= SCREEN_SAVER_MIN_SEC && sec <= SCREEN_SAVER_MAX_SEC);
+}
+
+void CONFIG_formatDuration(uint16_t sec, char *out, size_t size) {
+  if (sec == 0) {
+    strlcpy(out, "Off", size);
+  } else if (sec % 3600 == 0) {
+    snprintf(out, size, "%u h", sec / 3600);
+  } else if (sec % 60 == 0) {
+    snprintf(out, size, "%u min", sec / 60);
+  } else {
+    snprintf(out, size, "%u s", sec);
+  }
 }
 
 bool CONFIG_isTimeSynced() {

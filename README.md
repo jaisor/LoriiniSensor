@@ -39,7 +39,7 @@ back to the access point, and from there retries the network every minute while 
 |---|---|
 | `/` | Status: network, time, live values of every sensor, battery, memory |
 | `/wifi` | Network and transmit power (saves and reboots) |
-| `/device` | Name, timezone, screen brightness, button sounds volume, detected sensors and shunt resistors (applied live), config export/import, reboot, factory reset |
+| `/device` | Name, timezone, screen brightness, screen saver, button sounds volume, detected sensors and shunt resistors (applied live), config export/import, reboot, factory reset |
 | `/mqtt` | MQTT broker, base topic, Home Assistant discovery and publish interval (applied live), connection status, topic list |
 | `/update` | OTA firmware update (ElegantOTA) |
 | `/api` | Status JSON, including a `sensors` array with each sensor's readings |
@@ -168,10 +168,19 @@ the controls are the same everywhere, and the **Help** page on the device descri
   one value at a time with its minimum, maximum and a graph of the last 10 minutes, PWR stepping through the values.
   With no sensors connected a "Sensors" page shows where to connect one.
 - **Settings** - WiFi (details; BOOT forgets the network and restarts in setup mode), Sensors (what was found, and
-  whether it answers), screen brightness, button sounds volume, About
+  whether it answers), screen brightness, screen saver, button sounds volume, About
 - **Help** - buttons and gestures, sensors, Settings, power, web setup
 
 In setup mode the screen shows how to join the device's WiFi; press **BOOT** or double tap to go to the pages instead.
+
+## Screen saver
+
+Without a button press or touch for the screen saver time, the screen goes dark (backlight off, panel asleep);
+halfway there it dims to half its brightness. Any button or touch brings the brightness back. While dimmed the
+input works as usual; when the screen is dark, the press or touch only wakes it, and its click, swipe or tap
+is ignored. Set the time under Settings › Screen saver or on the Device web page: off, 15 or 30 seconds, 1, 2, 5
+(the default), 10, 15 or 30 minutes, or an hour (a configuration import takes any value from 10 to 3600 seconds).
+Holding PWR to switch off works with the screen dark too.
 
 ## Buttons and power
 

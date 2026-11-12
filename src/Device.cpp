@@ -11,6 +11,8 @@
 #define POWER_OFF_HOLD_MS 3000        // Hold PWR this long to switch off (only cuts power when on battery)
 #define POWER_OFF_DELAY_MS 1500       // Time to read the message before power is cut
 #define RESTART_DELAY_MS 1500         // Time to read the message before restarting
+#define WAKE_DROP_MS 500              // After the input that woke the screen ends, its gestures are still
+                                      // dropped this long (clicks and taps report up to 350ms after release)
 
 const char* deviceStateToString(DeviceState state) {
   switch (state) {
@@ -177,11 +179,40 @@ void CDevice::readBattery() {
   batteryVoltage = v;
 }
 
+// Screen saver: any button down or touch keeps the screen on. The input that wakes a dark screen does
+// only that: its gestures (and sounds) are dropped until WAKE_DROP_MS after it ends.
+bool CDevice::inputActivity(bool active) {
+  #ifdef SCREEN
+  if (active) {
+    tsInput = millis();
+    if (display->wake()) {
+      Log.verboseln("Screen woken, dropping that input");
+      dropInput = true;
+    }
+  } else if (dropInput && millis() - tsInput > WAKE_DROP_MS) {
+    dropInput = false;
+  }
+  return dropInput;
+  #else
+  (void)active;
+  return false;
+  #endif
+}
+
 void CDevice::handleButtons() {
+  ButtonEvent events[(uint8_t)ButtonId::COUNT];
+  bool pressed = false;
   for (uint8_t i = 0; i < (uint8_t)ButtonId::COUNT; i++) {
-    ButtonEvent event = buttons[i].loop();
-    if (event != ButtonEvent::NONE) {
-      onButton((ButtonId)i, event);
+    events[i] = buttons[i].loop();
+    pressed |= buttons[i].isPressed();
+  }
+  const bool drop = inputActivity(pressed);
+  for (uint8_t i = 0; i < (uint8_t)ButtonId::COUNT; i++) {
+    if (events[i] == ButtonEvent::NONE) continue;
+    if (drop) {
+      Log.verboseln("Button %s: %s (woke the screen)", buttonIdToString((ButtonId)i), buttonEventToString(events[i]));
+    } else {
+      onButton((ButtonId)i, events[i]);
     }
   }
 
@@ -216,7 +247,12 @@ void CDevice::onButton(ButtonId id, ButtonEvent event) {
 void CDevice::handleTouch() {
   #ifdef TOUCH
   TouchEvent event = touch.loop();
+  const bool drop = inputActivity(touch.isTouched());
   if (event == TouchEvent::NONE) return;
+  if (drop) {
+    Log.verboseln("Touch %s (woke the screen)", touchEventToString(event));
+    return;
+  }
   Log.infoln("Touch %s at %i,%i", touchEventToString(event), touch.getX(), touch.getY());
   bool handled = false;
   #ifdef SCREEN

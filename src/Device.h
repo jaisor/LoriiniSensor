@@ -101,6 +101,8 @@ private:
   unsigned long tsPowerOff;
   bool restartRequested;
   unsigned long tsRestart;
+  bool dropInput = false;         // The current input woke the screen: its gestures are ignored
+  unsigned long tsInput = 0;      // Last time a button was down or the screen touched
 
   CButton buttons[(uint8_t)ButtonId::COUNT];
   #ifdef TOUCH
@@ -121,6 +123,7 @@ private:
   void handleButtons();
   void onButton(ButtonId id, ButtonEvent event);
   void handleTouch();
+  bool inputActivity(bool active);   // Screen saver; true while input is to be dropped
   void handlePowerOff();
   void handleRestart();
   void changed() { revision++; }
